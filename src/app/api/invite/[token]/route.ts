@@ -3,11 +3,13 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { hashPassword, createSession, getSessionUser, COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth";
 import { WorkspaceRole, TaskStage, TaskPriority } from "@prisma/client";
+import { ensureSeedData } from "@/lib/seed";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
+    await ensureSeedData();
     const { token } = await params;
 
     const invite = await prisma.workspaceInvite.findUnique({

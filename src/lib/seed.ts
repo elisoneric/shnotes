@@ -2,10 +2,88 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { WorkspaceRole, ProjectAccessLevel, TaskStage, TaskPriority, CommentType } from "@prisma/client";
 
+let schemaReconciled = false;
+
+export async function reconcileDatabaseSchema() {
+  if (schemaReconciled) return;
+  try {
+    // 1. Enum
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "ProjectAccessLevel" AS ENUM ('LEAD', 'CONTRIBUTOR', 'OBSERVER');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    // 2. Add columns if not exist
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "isSystemAdmin" BOOLEAN NOT NULL DEFAULT false;
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "colorAccent" TEXT DEFAULT '#3b82f6';
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "pages" ADD COLUMN IF NOT EXISTS "layout" TEXT DEFAULT 'centered';
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "pages" ADD COLUMN IF NOT EXISTS "fontFamily" TEXT DEFAULT 'sans';
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "pages" ADD COLUMN IF NOT EXISTS "fontSize" TEXT DEFAULT 'normal';
+    `);
+
+    // 3. Project members table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "project_members" (
+        "id" TEXT NOT NULL,
+        "projectId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "accessLevel" "ProjectAccessLevel" NOT NULL DEFAULT 'CONTRIBUTOR',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "project_members_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "project_members_projectId_userId_key" ON "project_members"("projectId", "userId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "project_members_userId_idx" ON "project_members"("userId");
+    `);
+
+    // 4. Page subscribers table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "page_subscribers" (
+        "id" TEXT NOT NULL,
+        "pageId" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "page_subscribers_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "page_subscribers_pageId_email_key" ON "page_subscribers"("pageId", "email");
+    `);
+
+    schemaReconciled = true;
+  } catch (err) {
+    console.warn("[reconcileDatabaseSchema] Schema auto-reconcile note:", err);
+  }
+}
+
 export async function ensureSeedData() {
+  await reconcileDatabaseSchema();
+
   try {
     const existingCount = await prisma.user.count();
     if (existingCount > 0) {
+      // Defensive: Ensure primary admin has isSystemAdmin flag active
+      const adminEmail = process.env.ADMIN_EMAIL || "admin@esam.com.ng";
+      await prisma.user.updateMany({
+        where: { email: adminEmail.toLowerCase().trim() },
+        data: { isSystemAdmin: true },
+      }).catch(() => {});
       return;
     }
 

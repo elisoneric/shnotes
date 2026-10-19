@@ -3,11 +3,13 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { hashPassword, createSession, COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth";
 import { WorkspaceRole, TaskStage, TaskPriority } from "@prisma/client";
+import { ensureSeedData } from "@/lib/seed";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    await ensureSeedData();
     const { name, email, password, workspaceName, projectName, projectKey } = await req.json();
 
     if (!name || !email || !password || !workspaceName) {
