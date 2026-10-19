@@ -1,4 +1,4 @@
-# Trustbricks Enterprise Governance Platform
+# ShNotes Enterprise Governance Platform
 ## Production Architecture & Operational Walkthrough
 
 An enterprise-grade, self-hosted governance and workflow platform deployed via Docker on Coolify. It combines Notion-style document canvases with multi-disciplinary role governance pipelines and zero-latency local-first offline synchronization.

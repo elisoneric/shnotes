@@ -10,24 +10,24 @@ export async function GET() {
   try {
     await ensureSeedData();
 
-    let user = await getSessionUser();
-
-    // If no active session cookie, fallback to default admin/HOO user so app is immediately usable out of the box
+    const user = await getSessionUser();
     if (!user) {
-      user = await prisma.user.findFirst({
-        include: {
-          memberships: { include: { workspace: true } },
+      return NextResponse.json({ authenticated: false, user: null });
+    }
+
+    // Get user's active workspace
+    const member = await prisma.workspaceMember.findFirst({
+      where: { userId: user.id },
+      include: {
+        workspace: {
+          include: {
+            projects: { where: { deletedAt: null } },
+          },
         },
-      });
-    }
-
-    if (!user) {
-      return NextResponse.json({ authenticated: false });
-    }
-
-    const workspace = await prisma.workspace.findFirst({
-      include: { projects: true },
+      },
     });
+
+    const workspace = member?.workspace || null;
 
     return NextResponse.json({
       authenticated: true,
@@ -35,7 +35,7 @@ export async function GET() {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: member?.role || user.role,
       },
       workspace: workspace
         ? {
@@ -47,7 +47,7 @@ export async function GET() {
         : null,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to get user" }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to get user session" }, { status: 500 });
   }
 }
 

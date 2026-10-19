@@ -70,4 +70,18 @@ export async function getSessionUser() {
   }
 }
 
+export async function invalidateSession(): Promise<void> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
+    if (token) {
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      await prisma.authSession.deleteMany({ where: { tokenHash } });
+    }
+    cookieStore.delete(COOKIE_NAME);
+  } catch (err) {
+    console.error("Failed to invalidate session:", err);
+  }
+}
+
 export { COOKIE_NAME, SESSION_TTL_DAYS };

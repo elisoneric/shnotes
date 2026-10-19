@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: process.env.WORKSPACE_NAME ?? "Trustbricks Engineering Governance",
+  title: process.env.WORKSPACE_NAME ?? "ShNotes | Governed Workflow & Operations",
   description: "Enterprise engineering workflow, governed tasks, and offline-first notes.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Trustbricks",
+    title: process.env.WORKSPACE_NAME ?? "ShNotes",
   },
   robots: { index: false, follow: false },
 };

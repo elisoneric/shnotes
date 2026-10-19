@@ -1,7 +1,7 @@
 [package]
-name = "trustbricks-desktop"
+name = "shnotes-desktop"
 version = "0.1.0"
-description = "Trustbricks Engineering Governance Desktop Client"
+description = "ShNotes Engineering Governance Desktop Client"
 edition = "2021"
 
 [build-dependencies]

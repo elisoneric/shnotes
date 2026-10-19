@@ -9,8 +9,8 @@ export async function ensureSeedData() {
       return;
     }
 
-    const email = process.env.ADMIN_EMAIL || "admin@trustbricks.com";
-    const password = process.env.ADMIN_PASSWORD || "TrustbricksPass123!";
+    const email = process.env.ADMIN_EMAIL || "admin@shnotes.io";
+    const password = process.env.ADMIN_PASSWORD || "ShNotesAdmin123!";
     const passwordHash = hashPassword(password);
 
     // 1. Create Enterprise Members
@@ -25,7 +25,7 @@ export async function ensureSeedData() {
 
     const guideUser = await prisma.user.create({
       data: {
-        email: "guide@trustbricks.com",
+        email: "guide@shnotes.io",
         name: "Lead Reviewer & Guide",
         passwordHash,
         role: WorkspaceRole.REVIEWER_GUIDE,
@@ -34,7 +34,7 @@ export async function ensureSeedData() {
 
     const specialistUser = await prisma.user.create({
       data: {
-        email: "specialist@trustbricks.com",
+        email: "specialist@shnotes.io",
         name: "Principal Specialist / Developer",
         passwordHash,
         role: WorkspaceRole.CONTRIBUTOR,
@@ -44,8 +44,8 @@ export async function ensureSeedData() {
     // 2. Create Workspace
     const workspace = await prisma.workspace.create({
       data: {
-        name: process.env.WORKSPACE_NAME || "Trustbricks",
-        slug: "trustbricks",
+        name: process.env.WORKSPACE_NAME || "Enterprise Operations",
+        slug: "operations",
         members: {
           create: [
             { userId: ownerUser.id, role: WorkspaceRole.OWNER },
@@ -57,22 +57,22 @@ export async function ensureSeedData() {
     });
 
     // 3. Create Enterprise Governed Projects with designated Owner & Guide
-    const eqProject = await prisma.project.create({
+    const corProject = await prisma.project.create({
       data: {
-        name: "Equity Portal",
-        key: "EQ",
-        description: "Investor relations, shareholder register, cap table, and dividend ledger",
+        name: "Core Platform",
+        key: "COR",
+        description: "Primary operational systems, data models, and workflow engines",
         workspaceId: workspace.id,
         ownerName: "Director of Operations",
         guideName: "Lead Reviewer & Guide",
       },
     });
 
-    const hrProject = await prisma.project.create({
+    const sysProject = await prisma.project.create({
       data: {
-        name: "HR Operations Portal",
-        key: "HR",
-        description: "Employee attendance geofencing, leave workflows, and performance reviews",
+        name: "Systems Engineering",
+        key: "SYS",
+        description: "Infrastructure resilience, offline synchronization, and edge caching",
         workspaceId: workspace.id,
         ownerName: "Director of Operations",
         guideName: "Lead Reviewer & Guide",
@@ -82,16 +82,16 @@ export async function ensureSeedData() {
     // 4. Create Initial Governed Tasks illustrating the 7-stage enterprise lifecycle
     const task1 = await prisma.task.create({
       data: {
-        projectId: eqProject.id,
-        projectTaskId: "EQ-101",
-        title: "Automated Dividend Payout Disbursal Engine",
-        description: "Calculate quarterly dividends for verified shareholders and produce payout batch files for bank approval.",
+        projectId: corProject.id,
+        projectTaskId: "COR-101",
+        title: "Automated Data Pipeline & Governance Engine",
+        description: "Calculate ledger balances for verified entities and produce reconciliation batch files for audit approval.",
         stage: TaskStage.DEV_ASSESSMENT,
         priority: TaskPriority.HIGH,
         creatorId: ownerUser.id,
         assigneeId: specialistUser.id,
-        taReviewNotes: "Review: Verify integration with existing disbursement API. Requires idempotent transaction IDs to avoid duplicate payments.",
-        devRecommendation: "Implementation Plan: Implement a transactional outbox table with idempotent batch hashing. Process 50 payouts per chunk with retry backoff. Estimated effort: 3 days.",
+        taReviewNotes: "Review: Verify integration with existing transactional ledger API. Requires idempotent transaction IDs to avoid duplicate execution.",
+        devRecommendation: "Implementation Plan: Implement a transactional outbox table with idempotent batch hashing. Process 50 items per chunk with retry backoff. Estimated effort: 3 days.",
         order: 1.0,
       },
     });
@@ -101,7 +101,7 @@ export async function ensureSeedData() {
         taskId: task1.id,
         userId: ownerUser.id,
         type: CommentType.STANDARD_CHAT,
-        content: "Target deadline for this deliverable is scheduled before board review.",
+        content: "Target deadline for this deliverable is scheduled before executive review.",
       },
     });
 
@@ -116,27 +116,27 @@ export async function ensureSeedData() {
 
     await prisma.task.create({
       data: {
-        projectId: eqProject.id,
-        projectTaskId: "EQ-102",
-        title: "Two-Factor Authentication for Investor Portal",
-        description: "Enforce authenticator app verification for all shareholder account logins.",
+        projectId: corProject.id,
+        projectTaskId: "COR-102",
+        title: "Two-Factor Authentication & Cryptographic Session Security",
+        description: "Enforce authenticator app verification and hardware keys for all privileged workspace accounts.",
         stage: TaskStage.READY_FOR_TESTING,
         priority: TaskPriority.URGENT,
         creatorId: ownerUser.id,
         assigneeId: specialistUser.id,
         taReviewNotes: "Standard RFC 6238 TOTP with fallback recovery codes.",
         devRecommendation: "Cryptographic HMAC-SHA1 TOTP verification and encrypted backup codes implemented.",
-        qaTestNotes: "Staging Preview: https://staging.trustbricks.com/auth/2fa\nVerification Account: investor.demo@trustbricks.com / pass: Test2FA!123\nSteps: Log in, scan QR code with authenticator app, verify 6-digit pin.",
+        qaTestNotes: "Staging Preview: https://staging.internal.net/auth/2fa\nVerification Account: auditor.demo@internal.net / pass: Test2FA!123\nSteps: Log in, scan QR code with authenticator app, verify 6-digit pin.",
         order: 2.0,
       },
     });
 
     await prisma.task.create({
       data: {
-        projectId: hrProject.id,
-        projectTaskId: "HR-201",
-        title: "Geofenced Mobile Clock-in Verification",
-        description: "Restrict employee clock-in to within 100 meters of the office coordinates.",
+        projectId: sysProject.id,
+        projectTaskId: "SYS-201",
+        title: "Offline Sync Reconciliation & Conflict Detection",
+        description: "Resolve client-side mutations with vector clocks and outbox transaction ordering.",
         stage: TaskStage.PROPOSED,
         priority: TaskPriority.MEDIUM,
         creatorId: ownerUser.id,

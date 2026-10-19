@@ -10,13 +10,7 @@ export async function POST(req: Request) {
   try {
     await ensureSeedData();
 
-    let currentUser = await getSessionUser();
-    if (!currentUser) {
-      currentUser = await prisma.user.findFirst({
-        include: { memberships: { include: { workspace: true } } },
-      });
-    }
-
+    const currentUser = await getSessionUser();
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -168,30 +162,37 @@ export async function POST(req: Request) {
     }
 
     // Pull Phase: Fetch Server Deltas
+    // Pull Phase: Fetch Server Deltas scoped to user's workspaces
     const sinceDate = lastSyncedAt ? new Date(lastSyncedAt) : new Date(0);
+
+    const userMemberships = await prisma.workspaceMember.findMany({
+      where: { userId: currentUser.id },
+      select: { workspaceId: true },
+    });
+    const workspaceIds = userMemberships.map((m) => m.workspaceId);
 
     const [workspaces, projects, tasks, taskComments, pages] = await Promise.all([
       prisma.workspace.findMany({
-        where: { updatedAt: { gte: sinceDate } },
+        where: { id: { in: workspaceIds }, updatedAt: { gte: sinceDate } },
       }),
       prisma.project.findMany({
-        where: { updatedAt: { gte: sinceDate } },
+        where: { workspaceId: { in: workspaceIds }, updatedAt: { gte: sinceDate } },
       }),
       prisma.task.findMany({
-        where: { updatedAt: { gte: sinceDate } },
+        where: { project: { workspaceId: { in: workspaceIds } }, updatedAt: { gte: sinceDate } },
         include: {
           creator: { select: { id: true, name: true, role: true } },
           assignee: { select: { id: true, name: true, role: true } },
         },
       }),
       prisma.taskComment.findMany({
-        where: { createdAt: { gte: sinceDate } },
+        where: { task: { project: { workspaceId: { in: workspaceIds } } }, createdAt: { gte: sinceDate } },
         include: {
           user: { select: { id: true, name: true, role: true } },
         },
       }),
       prisma.page.findMany({
-        where: { updatedAt: { gte: sinceDate } },
+        where: { workspaceId: { in: workspaceIds }, updatedAt: { gte: sinceDate } },
       }),
     ]);
 

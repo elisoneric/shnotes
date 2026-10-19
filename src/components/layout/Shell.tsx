@@ -28,9 +28,19 @@ import {
   UserCheck,
   Building2,
   Trash2,
+  LogOut,
 } from "lucide-react";
 
-export function Shell() {
+export interface ShellProps {
+  initialUser?: {
+    id: string;
+    name: string;
+    email: string;
+    role: WorkspaceRole;
+  };
+}
+
+export function Shell({ initialUser }: ShellProps = {}) {
   const { status, pendingCount, triggerSync, isSyncing } = useSync();
 
   // Navigation State
@@ -40,10 +50,11 @@ export function Shell() {
   const [pages, setPages] = useState<LocalPage[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 
-  // User & Role State (Defaults to HOO / Director for demoing governance, switchable in UI)
-  const [currentRole, setCurrentRole] = useState<WorkspaceRole>("OWNER");
-  const [userName, setUserName] = useState("Project Owner (Final Authority)");
-  const [userId, setUserId] = useState("user_admin");
+  // User, Workspace & Role State
+  const [currentRole, setCurrentRole] = useState<WorkspaceRole>(initialUser?.role || "OWNER");
+  const [userName, setUserName] = useState(initialUser?.name || "Project Owner");
+  const [userId, setUserId] = useState(initialUser?.id || "user_admin");
+  const [workspaceName, setWorkspaceName] = useState("Enterprise Operations");
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -84,6 +95,29 @@ export function Shell() {
     const interval = setInterval(refreshLocalData, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated) {
+          if (data.user?.name) setUserName(data.user.name);
+          if (data.user?.id) setUserId(data.user.id);
+          if (data.user?.role) setCurrentRole(data.user.role);
+          if (data.workspace?.name) setWorkspaceName(data.workspace.name);
+        }
+      })
+      .catch((err) => console.warn("Failed to load user session:", err));
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.warn("Logout error:", err);
+    }
+    window.location.href = "/";
+  };
 
   const toggleDarkMode = () => {
     const next = !darkMode;
@@ -132,7 +166,7 @@ export function Shell() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased font-sans select-none">
+    <div className="flex h-screen w-screen overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased font-sans">
       <RegisterSw />
       <IosInstallModal />
 
@@ -144,18 +178,20 @@ export function Shell() {
       >
         {/* Workspace Brand Header */}
         <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 flex items-center justify-center font-bold text-xs">
-              TB
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 flex items-center justify-center font-bold text-xs shrink-0">
+              {(workspaceName || "SH").slice(0, 2).toUpperCase()}
             </div>
-            <div>
-              <h1 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-none">Trustbricks</h1>
-              <span className="text-[10px] text-zinc-400 font-medium">Enterprise Governance</span>
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-none truncate">
+                {workspaceName}
+              </h1>
+              <span className="text-[10px] text-zinc-400 font-medium truncate block mt-0.5">Enterprise Governance</span>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 shrink-0 ml-1"
           >
             <PanelLeftClose className="w-4 h-4" />
           </button>
@@ -280,6 +316,26 @@ export function Shell() {
             <span className="text-[10px] text-zinc-400 uppercase font-mono">Sync</span>
           </button>
         </div>
+
+        {/* User Account & Logout Footer */}
+        <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 flex items-center justify-between">
+          <div className="min-w-0 flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-200 shrink-0">
+              {(userName || "U").slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{userName}</p>
+              <p className="text-[10px] text-zinc-400 truncate capitalize">{currentRole.toLowerCase().replace(/_/g, " ")}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Sign Out"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </aside>
 
       {/* MAIN RIGHT CONTAINER */}
@@ -298,7 +354,7 @@ export function Shell() {
 
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-zinc-500">Perspective:</span>
-              {/* Role Switcher Pill (HOO vs TA vs Dev) */}
+              {/* Role Switcher Pill */}
               <select
                 value={currentRole}
                 onChange={(e) => {
@@ -335,6 +391,15 @@ export function Shell() {
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>Indunix AI Copilot</span>
+            </button>
+
+            {/* Sign Out Button in Header */}
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </header>

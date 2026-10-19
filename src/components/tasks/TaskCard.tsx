@@ -39,7 +39,7 @@ export function TaskCard({ task, onClick, commentCount = 0 }: TaskCardProps) {
   return (
     <div
       onClick={onClick}
-      className="group relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3.5 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all cursor-pointer select-none"
+      className="group relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3.5 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all cursor-pointer"
     >
       {/* Top Header: ID & Priority */}
       <div className="flex items-center justify-between mb-2">

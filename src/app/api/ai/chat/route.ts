@@ -43,8 +43,8 @@ ${activeTasks.map((t) => `  * [${t.projectTaskId}] ${t.title} (Stage: ${t.stage}
 ${recentPages.map((p) => `  * ${p.title} ${p.isDiary ? "(Diary entry)" : ""}`).join("\n") || "  None"}
 `;
 
-    const systemPrompt = `You are Indunix Assistant, the embedded AI Copilot for the Trustbricks engineering governance platform.
-You assist developers, Technical Assistants (TA), and Heads of Operations (HOO).
+    const systemPrompt = `You are Indunix Assistant, the embedded AI Copilot for the ShNotes enterprise engineering governance platform.
+You assist project owners, technical reviewers, specialists, and stakeholders.
 You have real-time access to the active workspace context below.
 Answer user queries accurately, concisely, and professionally.
 Do not use emojis. Use clean markdown formatting.
