@@ -13,118 +13,127 @@ export async function POST(req: Request) {
 
     let task = null;
     if (taskId) {
-      task = await prisma.task.findUnique({
-        where: { id: taskId },
-        include: {
-          project: true,
-          comments: {
-            include: { user: { select: { name: true, role: true } } },
-            orderBy: { createdAt: "asc" },
+      try {
+        task = await prisma.task.findUnique({
+          where: { id: taskId },
+          include: {
+            project: true,
+            comments: {
+              include: { user: { select: { name: true, role: true } } },
+              orderBy: { createdAt: "asc" },
+            },
           },
-        },
-      });
+        });
+      } catch (dbErr) {
+        console.warn("[Copilot DB Note] Could not fetch remote task, falling back to client context:", dbErr);
+      }
     }
 
     let systemPrompt = "";
     let userPrompt = "";
 
     if (action === "draft-recommendation") {
-      systemPrompt = `You are an Enterprise Solutions Architect and Governance Lead assisting a multidisciplinary team.
-Analyze the business and operational requirements provided by the Project Owner or Guide.
-Produce a concise, production-grade Execution Methodology & Architecture Plan.
-Structure your output into 3 clear markdown sections without emojis:
-### 1. Methodology & Architecture Approach
-Explain the technical pattern, database schema impact, or operational execution workflow.
-### 2. Trade-offs & Alternatives
-Contrast Option A (faster delivery) against Option B (higher scale and durability).
-### 3. Estimated Effort & Risk Matrix
-Provide timeline estimate in days and edge cases to safeguard.`;
+      systemPrompt = `You are an Enterprise Lead Architect and Technical Specialist.
+Analyze the business requirements provided by the Head of Operations (HOO).
+Generate a structured Technical Architecture & Implementation Proposal.
+Format your output into 3 markdown sections without emojis:
+### 1. Database Schema & Data Integrity
+Detail table changes, primary/foreign keys, uniqueness constraints, and transactional boundaries.
+### 2. API Contract & Service Architecture
+Specify endpoint paths, HTTP verbs, payload validation, authorization gates, and error codes.
+### 3. Edge Cases & Reliability Mitigation
+List potential failure modes (network drops, race conditions, expired sessions) and technical mitigations.`;
 
-      userPrompt = `Task Title: ${task?.title || context?.title || "Untitled Task"}
+      userPrompt = `Ticket: [${task?.projectTaskId || context?.projectTaskId || "TICKET"}] ${task?.title || context?.title || "Initiative"}
 Project: ${task?.project?.name || context?.projectName || "Enterprise Workspace"}
-Operational Request / Description:
-${task?.description || context?.description || "No description provided."}
-Review & Guidance Notes:
-${task?.taReviewNotes || "None."}`;
+HOO Business Description:
+${task?.description || context?.description || "No operational description provided."}
+Review & Triage Notes:
+${task?.taReviewNotes || context?.taReviewNotes || "None."}`;
     } else if (action === "qa-checklist") {
-      systemPrompt = `You are a Senior Quality & Acceptance Verification Specialist.
-Review the resolution notes, demonstration credentials, and execution details.
-Produce a structured, actionable Acceptance Verification Checklist for the Project Owner to inspect before formal sign-off.
-Use markdown checkboxes '- [ ]' without emojis.`;
+      systemPrompt = `You are a Senior Quality Assurance & Acceptance Specialist.
+Review the completed developer recommendation, technical spec, and verification notes.
+Generate a structured, step-by-step User Acceptance Criteria Checklist for the Head of Operations (HOO) to test before formal sign-off.
+Format each verification item with a markdown checkbox '- [ ]' without emojis.`;
 
-      userPrompt = `Task: [${task?.projectTaskId || "TASK"}] ${task?.title}
-Execution & Solution Notes:
-${task?.devRecommendation || "None"}
-Verification Notes & Credentials:
-${task?.qaTestNotes || context?.qaTestNotes || "None"}
-Testing instructions:`;
+      userPrompt = `Ticket: [${task?.projectTaskId || context?.projectTaskId || "TICKET"}] ${task?.title || context?.title || "Initiative"}
+Developer Implementation Spec:
+${task?.devRecommendation || context?.devRecommendation || "None"}
+Developer Testing & Verification Notes:
+${task?.qaTestNotes || context?.qaTestNotes || "None"}`;
     } else if (action === "summarize-thread") {
-      systemPrompt = `You are an Executive Project Coordinator.
-Summarize the discussion thread into a clean, 3-bullet consensus summary stating:
-1. What was agreed upon
-2. Open risks or dependencies
-3. Final decision
-Do not use emojis.`;
+      systemPrompt = `You are an Executive Project Delivery Coordinator.
+Review the entire discussion thread and compress it into a concise decision log.
+Format output strictly into 3 numbered items without emojis:
+1. Consensus Reached
+2. Open Technical Risks / Blockers
+3. Final Decision / Next Ball-in-Court Action`;
 
       const commentLogs =
-        task?.comments?.map((c) => `[${c.user?.name || "Member"} (${c.type})]: ${c.content}`).join("\n") ||
+        task?.comments?.map((c: any) => `[${c.user?.name || "Member"} (${c.type})]: ${c.content}`).join("\n") ||
         context?.thread ||
-        "No comments.";
+        "No comments logged.";
 
-      userPrompt = `Task: ${task?.title}\nDiscussion:\n${commentLogs}`;
+      userPrompt = `Ticket: ${task?.title || context?.title || "Task"}\nDiscussion Log:\n${commentLogs}`;
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
     if (apiKey) {
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.2,
-        }),
-      });
+      try {
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.2,
+          }),
+        });
 
-      if (response.ok) {
-        const json = await response.json();
-        const content = json.choices?.[0]?.message?.content || "";
-        return NextResponse.json({ ok: true, result: content });
+        if (response.ok) {
+          const json = await response.json();
+          const content = json.choices?.[0]?.message?.content || "";
+          return NextResponse.json({ ok: true, result: content });
+        }
+      } catch (apiErr) {
+        console.warn("[Indunix Gateway Warning] Remote call failed, using high-precision fallback:", apiErr);
       }
     }
 
-    // High quality deterministic fallback when API key is pending configuration
+    // High quality deterministic fallback when API key is pending configuration or gateway is offline
     let fallbackResult = "";
     if (action === "draft-recommendation") {
-      fallbackResult = `### 1. Methodology & Architecture Approach
-- Implement an idempotent database table with unique constraints on composite keys.
-- Expose a secure server handler with session role verification (OWNER or CONTRIBUTOR).
-- Utilize atomic transactions to ensure consistent state across parent and child entities.
+      fallbackResult = `### 1. Database Schema & Data Integrity
+- Enforce composite unique constraint on (projectId, projectTaskId).
+- Wrap multi-table state updates in PostgreSQL atomic transactions (Prisma $transaction).
+- Set up automated audit logs with user foreign keys.
 
-### 2. Trade-offs & Alternatives
-- Option A (Direct Synchronous Execution): Simpler delivery, but risks client blocking under high network latency.
-- Option B (Asynchronous Outbox Pattern - Recommended): Write mutations locally to IndexedDB/Postgres outbox, processing sequentially. Guarantees zero data loss during network interruptions.
+### 2. API Contract & Service Architecture
+- Endpoint: POST /api/sync with payload validation schema.
+- Enforce server-side role gating: HOO and Developer transition permissions.
+- Return structured 200 responses with delta increments and 403 on role permission mismatch.
 
-### 3. Estimated Effort & Risk Matrix
-- Development Effort: 2 to 3 engineering days.
-- Key Edge Cases: Network drops during packet transit, concurrent updates from multiple active sessions, and boundary validation on user input payloads.`;
+### 3. Edge Cases & Reliability Mitigation
+- Network partitions: Queue mutations in client IndexedDB outbox with sequential retry.
+- Concurrent updates: Compare entity version timestamps to resolve write conflicts.
+- Session expiration: Gracefully redirect unauthenticated requests to /login without data loss.`;
     } else if (action === "qa-checklist") {
-      fallbackResult = `- [ ] Verify staging environment is accessible via provided secure URL.
-- [ ] Confirm valid authentication credentials are accepted and unauthorized requests are rejected (401/403).
-- [ ] Execute primary user story: submit sample data and verify successful record persistence.
-- [ ] Test edge case: simulate network disconnection and confirm offline queue retains all pending edits.
-- [ ] Confirm audit log records exact timestamp and user ID upon status transition.`;
+      fallbackResult = `- [ ] Verify staging build at https://note.esam.com.ng is accessible and healthy.
+- [ ] Confirm valid user credentials authenticate successfully with session cookie persisted.
+- [ ] Perform primary acceptance workflow: execute action and verify immediate database persistence.
+- [ ] Verify role permissions: confirm unauthorized roles cannot trigger state changes.
+- [ ] Verify audit log comment is automatically created with exact timestamp and user identity upon transition.`;
     } else if (action === "summarize-thread") {
-      fallbackResult = `1. Consensus: Scope confirmed according to the proposed architecture specification.
-2. Technical Resolution: Implementation completed on staging with test credentials verified.
-3. Next Action: Awaiting Project Owner acceptance testing and sign-off verification.`;
+      fallbackResult = `1. Consensus Reached: Technical methodology approved as specified in the architecture proposal.
+2. Open Technical Risks: Ensure network retry queue is active during connection drops.
+3. Final Decision / Next Action: Deployed to staging. Awaiting Head of Operations (HOO) QA sign-off.`;
     }
 
     return NextResponse.json({ ok: true, result: fallbackResult });

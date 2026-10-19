@@ -134,6 +134,9 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     console.error("[Signup Error]:", err);
-    return NextResponse.json({ error: err.message || "Failed to create account" }, { status: 500 });
+    const msg = err?.message?.includes("Can't reach database server")
+      ? "Database server is currently unreachable. Please verify database connectivity."
+      : err?.message || "Failed to create account";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

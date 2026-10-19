@@ -4,7 +4,7 @@
   "webDir": "public",
   "bundledWebRuntime": false,
   "server": {
-    "url": "http://localhost:3000/app",
-    "cleartext": true
+    "url": "https://note.esam.com.ng/app",
+    "cleartext": false
   }
 }

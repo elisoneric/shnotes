@@ -9,3 +9,6 @@ dist-desktop
 dist
 android/app/build
 android/.gradle
+tools/
+*.zip
+releases/ShNotes-Windows-Desktop/

@@ -2,40 +2,61 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
+const logFile = path.join(path.dirname(process.execPath), "desktop.log");
+function log(msg) {
+  try {
+    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch (e) {}
+}
+
+log("Electron main process initializing...");
+
+process.on("uncaughtException", (err) => {
+  log(`Uncaught Exception: ${err.stack || err}`);
+});
+process.on("unhandledRejection", (err) => {
+  log(`Unhandled Rejection: ${err.stack || err}`);
+});
+
 let activeWindow = null;
 let currentAppVersion = null;
 
 function getTargetUrl() {
-  // 1. Environment variable
+  // 1. config.json next to executable
+  try {
+    const configPath = path.join(path.dirname(process.execPath), "config.json");
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      if (parsed.appUrl) {
+        log(`Found appUrl in config.json: ${parsed.appUrl}`);
+        return parsed.appUrl;
+      }
+    }
+  } catch (err) {
+    log(`Error reading config.json: ${err}`);
+  }
+
+  // 2. Environment variable
   if (process.env.APP_URL) {
+    log(`Using APP_URL from env: ${process.env.APP_URL}`);
     return process.env.APP_URL;
   }
 
-  // 2. config.json next to executable or in electron directory
-  try {
-    const candidates = [
-      path.join(path.dirname(process.execPath), "config.json"),
-      path.join(__dirname, "config.json"),
-    ];
-    for (const p of candidates) {
-      if (fs.existsSync(p)) {
-        const parsed = JSON.parse(fs.readFileSync(p, "utf-8"));
-        if (parsed.appUrl) return parsed.appUrl;
-      }
-    }
-  } catch (err) {}
-
-  // 3. Default fallback
-  return "http://localhost:3000/app";
+  // 3. Default fallback to production server
+  log("Defaulting to https://note.esam.com.ng/app");
+  return "https://note.esam.com.ng/app";
 }
 
 function createWindow() {
+  log("Creating BrowserWindow...");
+  const iconPath = path.join(__dirname, "icon.png");
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     title: "ShNotes Enterprise Governance",
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     backgroundColor: "#09090b",
     webPreferences: {
       nodeIntegration: false,
@@ -43,13 +64,30 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
     },
     autoHideMenuBar: true,
+    show: true,
   });
 
   activeWindow = win;
 
   const targetUrl = getTargetUrl();
-  console.log(`[ShNotes Desktop] Loading application: ${targetUrl}`);
+  log(`Loading URL: ${targetUrl}`);
   win.loadURL(targetUrl);
+
+  win.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
+    log(`Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`);
+    if (errorCode === -102 || errorCode === -105 || errorCode === -106) {
+      // Host not reachable yet, retry after 2 seconds
+      setTimeout(() => {
+        log("Retrying connection to " + validatedURL);
+        win.loadURL(validatedURL);
+      }, 2000);
+    }
+  });
+
+  win.webContents.on("did-finish-load", () => {
+    log("WebContents did-finish-load successfully");
+    checkUpgrade();
+  });
 
   // Periodic server upgrade detector for native desktop window
   const baseUrl = targetUrl.split("/app")[0];
@@ -72,7 +110,7 @@ function createWindow() {
       // If server version changed, perform desktop hard cache purge & reload
       if (serverVersion !== currentAppVersion) {
         currentAppVersion = serverVersion;
-        console.log(`[ShNotes Desktop] Server upgrade detected: ${serverVersion}. Purging cache and reloading...`);
+        log(`Server upgrade detected: ${serverVersion}. Purging cache and reloading...`);
 
         // Purge session HTTP cache and ServiceWorker caches
         await win.webContents.session.clearCache();
@@ -88,14 +126,10 @@ function createWindow() {
     }
   };
 
-  // Run version check after page load, then poll every 30s
-  win.webContents.on("did-finish-load", () => {
-    checkUpgrade();
-  });
-
   const upgradeInterval = setInterval(checkUpgrade, 30000);
 
   win.on("closed", () => {
+    log("BrowserWindow closed");
     clearInterval(upgradeInterval);
     activeWindow = null;
   });
@@ -115,6 +149,7 @@ ipcMain.handle("trigger-desktop-upgrade-refresh", async () => {
 });
 
 app.whenReady().then(() => {
+  log("app.whenReady fired");
   createWindow();
 
   app.on("activate", () => {
@@ -125,6 +160,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  log("app.on(window-all-closed) fired");
   if (process.platform !== "darwin") {
     app.quit();
   }

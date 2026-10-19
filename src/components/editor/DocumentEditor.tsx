@@ -26,7 +26,11 @@ import {
   Eye,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
+  Type,
+  AlignLeft,
 } from "lucide-react";
+import { SharePopover } from "./SharePopover";
 
 interface BlockItem {
   id: string;
@@ -47,7 +51,13 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
   const [secretToken, setSecretToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [slashMenuIndex, setSlashMenuIndex] = useState<number | null>(null);
-  const [fullWidth, setFullWidth] = useState(true);
+
+  // Document Preferences State (persisted per page)
+  const [layout, setLayout] = useState<"centered" | "full">("centered");
+  const [fontFamily, setFontFamily] = useState<"sans" | "serif" | "mono">("sans");
+  const [fontSize, setFontSize] = useState<"small" | "normal">("normal");
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
 
   const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
     if (el) {
@@ -72,6 +82,9 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
         setPage(p);
         setTitle(p.title);
         setSecretToken(p.secretToken || null);
+        if (p.layout) setLayout(p.layout as any);
+        if (p.fontFamily) setFontFamily(p.fontFamily as any);
+        if (p.fontSize) setFontSize(p.fontSize as any);
         const b = p.content?.blocks || [
           { id: "b1", type: "heading", level: 1, text: p.title || "Untitled Document" },
           { id: "b2", type: "paragraph", text: "" },
@@ -81,6 +94,62 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     }
     loadPage();
   }, [pageId]);
+
+  const handleUpdatePreferences = async (
+    newLayout?: "centered" | "full",
+    newFont?: "sans" | "serif" | "mono",
+    newSize?: "small" | "normal"
+  ) => {
+    const nextLayout = newLayout ?? layout;
+    const nextFont = newFont ?? fontFamily;
+    const nextSize = newSize ?? fontSize;
+    if (newLayout) setLayout(nextLayout);
+    if (newFont) setFontFamily(nextFont);
+    if (newSize) setFontSize(nextSize);
+
+    if (page) {
+      const updatedPage: LocalPage = {
+        ...page,
+        layout: nextLayout,
+        fontFamily: nextFont,
+        fontSize: nextSize,
+        version: page.version + 1,
+        updatedAt: new Date(),
+      };
+      setPage(updatedPage);
+      await localDb.pages.put(updatedPage);
+      await syncManager.queueMutation("page", page.id, "UPSERT", {
+        title,
+        content: { blocks },
+        layout: nextLayout,
+        fontFamily: nextFont,
+        fontSize: nextSize,
+        secretToken,
+        workspaceId: page.workspaceId,
+      });
+    }
+  };
+
+  const handleUpdateFromSharePopover = async (delta: Partial<LocalPage>) => {
+    if (!page) return;
+    const updatedPage: LocalPage = {
+      ...page,
+      ...delta,
+      version: page.version + 1,
+      updatedAt: new Date(),
+    };
+    setPage(updatedPage);
+    if (delta.secretToken !== undefined) {
+      setSecretToken(delta.secretToken);
+    }
+    await localDb.pages.put(updatedPage);
+    await syncManager.queueMutation("page", page.id, "UPSERT", {
+      title,
+      content: { blocks },
+      ...delta,
+      workspaceId: page.workspaceId,
+    });
+  };
 
   const loadCollaborators = useCallback(async () => {
     try {
@@ -376,76 +445,146 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     return <div className="p-8 text-xs text-zinc-400">Loading document...</div>;
   }
 
+  const fontClass = fontFamily === "serif" ? "font-serif" : fontFamily === "mono" ? "font-mono" : "font-sans";
+  const sizeClass = fontSize === "small" ? "text-xs" : "text-sm";
+  const containerWidth = layout === "full" ? "max-w-6xl w-full px-4 sm:px-10" : "max-w-3xl w-full px-4 sm:px-8";
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto">
+    <div className={`flex-1 flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto ${fontClass}`}>
       {/* Editor Top Bar: Share & Status */}
-      <div className="sticky top-0 z-10 px-8 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <FileText className="w-3.5 h-3.5" />
-          <span>Notion Document Canvas</span>
+      <div className="sticky top-0 z-20 px-4 sm:px-8 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0">
+          <FileText className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Notion Document Canvas</span>
           <span>•</span>
-          <span className="text-zinc-500">{blocks.length} blocks</span>
+          <span className="text-zinc-500 shrink-0">{blocks.length} blocks</span>
         </div>
 
-        {/* Action Controls: Full Width, Invite Collaborators & Secret Link */}
-        <div className="flex items-center gap-2">
-          {/* Full Width Canvas Toggle */}
+        {/* Consolidated Action Controls: Share & Preferences Menu (•••) */}
+        <div className="flex items-center gap-2 relative">
+          {/* Consolidated Share Button */}
           <button
-            onClick={() => setFullWidth(!fullWidth)}
-            title={fullWidth ? "Standard width" : "Full width"}
-            className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 font-medium flex items-center gap-1.5 transition-colors"
+            onClick={() => setSharePopoverOpen(true)}
+            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
           >
-            {fullWidth ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{fullWidth ? "Standard Width" : "Full Width"}</span>
+            <Share2 className="w-3.5 h-3.5 text-zinc-500" />
+            <span>Share</span>
+            {page?.secretToken && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Published to web" />
+            )}
           </button>
 
-          {/* Invite Collaborator Button */}
-          <button
-            onClick={() => setInviteModalOpen(true)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-medium flex items-center gap-1.5 transition-colors"
-          >
-            <Users className="w-3.5 h-3.5 text-zinc-500" />
-            <span>Invite Collaborators</span>
-          </button>
-
-          {/* Secret Link Trigger */}
-          {secretToken ? (
-            <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1">
-              <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <Lock className="w-3 h-3" />
-                <span>Published to Web</span>
-              </span>
-              <button
-                onClick={copyShareLink}
-                className="text-xs p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center gap-1"
-              >
-                {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                <span className="text-[10px]">{copied ? "Copied" : "Copy Link"}</span>
-              </button>
-              <button
-                onClick={toggleShare}
-                className="text-[10px] text-rose-500 hover:underline pl-1 border-l border-zinc-200 dark:border-zinc-700"
-              >
-                Revoke
-              </button>
-            </div>
-          ) : (
+          {/* Document Preferences Menu (••• Top-Right) */}
+          <div className="relative">
             <button
-              onClick={toggleShare}
-              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-medium flex items-center gap-1.5 transition-colors"
+              onClick={() => setPreferencesOpen(!preferencesOpen)}
+              title="Document Preferences"
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
             >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>Share Secret Link</span>
+              <MoreHorizontal className="w-4 h-4" />
             </button>
-          )}
+
+            {preferencesOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl p-2 z-30 space-y-2 animate-in fade-in zoom-in-95 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2">Page Layout</span>
+                  <div className="grid grid-cols-2 gap-1 mt-1">
+                    <button
+                      onClick={() => handleUpdatePreferences("centered")}
+                      className={`px-2 py-1.5 rounded-lg text-left font-medium transition-colors ${
+                        layout === "centered"
+                          ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold"
+                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      Centered
+                    </button>
+                    <button
+                      onClick={() => handleUpdatePreferences("full")}
+                      className={`px-2 py-1.5 rounded-lg text-left font-medium transition-colors ${
+                        layout === "full"
+                          ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold"
+                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      Full Width
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2">Font Family</span>
+                  <div className="space-y-0.5 mt-1">
+                    <button
+                      onClick={() => handleUpdatePreferences(undefined, "sans")}
+                      className={`w-full px-2 py-1 rounded-lg text-left font-sans flex items-center justify-between ${
+                        fontFamily === "sans"
+                          ? "bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                      }`}
+                    >
+                      <span>Sans (Inter)</span>
+                      {fontFamily === "sans" && <Check className="w-3.5 h-3.5 text-zinc-500" />}
+                    </button>
+                    <button
+                      onClick={() => handleUpdatePreferences(undefined, "serif")}
+                      className={`w-full px-2 py-1 rounded-lg text-left font-serif flex items-center justify-between ${
+                        fontFamily === "serif"
+                          ? "bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                      }`}
+                    >
+                      <span>Serif</span>
+                      {fontFamily === "serif" && <Check className="w-3.5 h-3.5 text-zinc-500" />}
+                    </button>
+                    <button
+                      onClick={() => handleUpdatePreferences(undefined, "mono")}
+                      className={`w-full px-2 py-1 rounded-lg text-left font-mono flex items-center justify-between ${
+                        fontFamily === "mono"
+                          ? "bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                      }`}
+                    >
+                      <span>Monospace</span>
+                      {fontFamily === "mono" && <Check className="w-3.5 h-3.5 text-zinc-500" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2">Font Size</span>
+                  <div className="grid grid-cols-2 gap-1 mt-1">
+                    <button
+                      onClick={() => handleUpdatePreferences(undefined, undefined, "small")}
+                      className={`px-2 py-1 rounded-lg text-left font-medium transition-colors ${
+                        fontSize === "small"
+                          ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold"
+                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      Small
+                    </button>
+                    <button
+                      onClick={() => handleUpdatePreferences(undefined, undefined, "normal")}
+                      className={`px-2 py-1 rounded-lg text-left font-medium transition-colors ${
+                        fontSize === "normal"
+                          ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold"
+                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      Normal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Canvas Document Area */}
       <div
-        className={`${
-          fullWidth ? "max-w-6xl w-full px-8 sm:px-14" : "max-w-3xl w-full px-12 sm:px-16"
-        } mx-auto py-10 space-y-4 transition-all duration-200`}
+        className={`${containerWidth} ${sizeClass} mx-auto py-8 sm:py-10 space-y-4 transition-all duration-200`}
       >
         {/* Document Title Input */}
         <textarea
@@ -891,6 +1030,16 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Consolidated Share Popover */}
+      {sharePopoverOpen && page && (
+        <SharePopover
+          page={page}
+          workspaceId={page.workspaceId}
+          onUpdatePage={handleUpdateFromSharePopover}
+          onClose={() => setSharePopoverOpen(false)}
+        />
       )}
     </div>
   );

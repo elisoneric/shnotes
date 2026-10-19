@@ -43,27 +43,19 @@ export function LandingPage({ isAuthenticated = false }: LandingPageProps) {
             {isAuthenticated ? (
               <Link
                 href="/app"
-                className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1.5"
+                className="text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1.5"
               >
                 <span>Enter Workspace</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="text-xs font-semibold px-4 py-2 rounded-lg text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/signup"
-                  className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1.5"
-                >
-                  <span>Create Workspace</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </>
+              <Link
+                href="/login"
+                className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1.5"
+              >
+                <span>Sign In</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             )}
           </div>
         </div>

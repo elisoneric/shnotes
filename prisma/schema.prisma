@@ -10,24 +10,31 @@ generator client {
 
 enum WorkspaceRole {
   OWNER             // Final-say authority / Project Owner
-  REVIEWER_GUIDE    // Project Guide / Reviewer / Lead
-  CONTRIBUTOR       // Contributor / Specialist / Developer
-  VIEWER            // Auditor / Commenter / Viewer
-  HOO               // Head of Operations alias
-  TECH_ASSISTANT    // Technical Assistant alias
-  DEVELOPER         // Developer alias
-  COLLABORATOR      // Team member alias
+  HOO               // Head of Operations (Creates business requirements, signs off QA)
+  TECH_ASSISTANT    // Triage & requirement validation
+  DEVELOPER         // Writes technical recommendations & executes implementation
+  COLLABORATOR      // General member / observer
+  // Backward-compatibility aliases
+  REVIEWER_GUIDE
+  CONTRIBUTOR
+  VIEWER
+}
+
+enum ProjectAccessLevel {
+  LEAD
+  CONTRIBUTOR
+  OBSERVER
 }
 
 enum TaskStage {
-  PROPOSED              // Objective & Requirements proposed
-  TA_REVIEW             // Under Review & Guidance
-  DEV_ASSESSMENT        // Execution Plan & Scope Assessment
-  CONFIRMED_READY       // Scope Approved & Locked
-  IN_PROGRESS           // Active Execution
-  READY_FOR_TESTING     // Verification & Deliverables
-  APPROVED_CLEARED      // Final Sign-off & Completed
-  ARCHIVED              // Moved to Archive
+  PROPOSED              // Raised by HOO
+  TA_REVIEW             // Triaged by Technical Assistant
+  DEV_ASSESSMENT        // Awaiting Developer recommendation & architecture plan
+  CONFIRMED_READY       // Scope approved and locked
+  IN_PROGRESS           // Active development
+  READY_FOR_TESTING     // Staging build ready with QA test notes
+  APPROVED_CLEARED      // HOO testing signed off
+  ARCHIVED              // Retained in historical archive
 }
 
 enum TaskPriority {
@@ -64,20 +71,22 @@ model Workspace {
 }
 
 model User {
-  id            String            @id @default(cuid())
-  email         String            @unique
-  name          String
-  passwordHash  String
-  avatarUrl     String?
-  role          WorkspaceRole     @default(OWNER)
-  memberships   WorkspaceMember[]
-  assignedTasks Task[]            @relation("TaskAssignee")
-  createdTasks  Task[]            @relation("TaskCreator")
-  comments      TaskComment[]
-  sessions      AuthSession[]
+  id                 String             @id @default(cuid())
+  email              String             @unique
+  name               String
+  passwordHash       String
+  avatarUrl          String?
+  role               WorkspaceRole      @default(OWNER)
+  isSystemAdmin      Boolean            @default(false)
+  memberships        WorkspaceMember[]
+  projectMemberships ProjectMember[]
+  assignedTasks      Task[]             @relation("TaskAssignee")
+  createdTasks       Task[]             @relation("TaskCreator")
+  comments           TaskComment[]
+  sessions           AuthSession[]
   pageCollaborations PageCollaborator[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@map("users")
 }
@@ -103,7 +112,7 @@ model WorkspaceMember {
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role        WorkspaceRole @default(CONTRIBUTOR)
+  role        WorkspaceRole @default(COLLABORATOR)
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -113,22 +122,39 @@ model WorkspaceMember {
 }
 
 model Project {
-  id          String    @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
-  key         String
+  key         String          // Ticket prefix e.g. EQ, HR
   description String?
+  colorAccent String?         @default("#3b82f6") // Accent color
   workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  ownerName   String?   // Final Say Authority / Project Owner
-  guideName   String?   // Project Guide / Reviewer
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerName   String?         // Final Say Authority / Project Owner
+  guideName   String?         // Project Guide / Reviewer
+  members     ProjectMember[]
   tasks       Task[]
-  version     Int       @default(1)
+  version     Int             @default(1)
   deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@unique([workspaceId, key])
   @@map("projects")
+}
+
+model ProjectMember {
+  id          String             @id @default(cuid())
+  projectId   String
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessLevel ProjectAccessLevel @default(CONTRIBUTOR)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
 }
 
 model Task {
@@ -192,35 +218,50 @@ model TaskComment {
 }
 
 model Page {
-  id              String      @id @default(cuid())
-  title           String      @default("Untitled Document")
+  id              String             @id @default(cuid())
+  title           String             @default("Untitled Document")
   icon            String?
   content         Json?
-  isDiary         Boolean     @default(false)
+  isDiary         Boolean            @default(false)
   diaryDate       DateTime?
-  secretToken     String?     @unique
+  layout          String?            @default("centered") // "centered" (768px) vs "full"
+  fontFamily      String?            @default("sans")     // "sans" | "serif" | "mono"
+  fontSize        String?            @default("normal")   // "small" | "normal"
+  secretToken     String?            @unique
   workspaceId     String
-  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   parentId        String?
-  parent          Page?       @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children        Page[]            @relation("PageTree")
+  parent          Page?              @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Page[]             @relation("PageTree")
   tasks           Task[]
   invites         WorkspaceInvite[]
   collaborators   PageCollaborator[]
-  version         Int               @default(1)
+  subscribers     PageSubscriber[]
+  version         Int                @default(1)
   deletedAt       DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([workspaceId, isDiary, diaryDate])
   @@map("pages")
+}
+
+model PageSubscriber {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  email     String
+  createdAt DateTime @default(now())
+
+  @@unique([pageId, email])
+  @@map("page_subscribers")
 }
 
 model WorkspaceInvite {
   id          String        @id @default(cuid())
   email       String?
   token       String        @unique
-  role        WorkspaceRole @default(CONTRIBUTOR)
+  role        WorkspaceRole @default(COLLABORATOR)
   workspaceId String
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   pageId      String?
@@ -242,11 +283,10 @@ model PageCollaborator {
   page      Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      WorkspaceRole @default(CONTRIBUTOR)
+  role      WorkspaceRole @default(COLLABORATOR)
   createdAt DateTime      @default(now())
 
   @@unique([pageId, userId])
   @@index([userId])
   @@map("page_collaborators")
 }
-

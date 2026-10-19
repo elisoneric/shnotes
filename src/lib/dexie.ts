@@ -17,6 +17,7 @@ export interface LocalProject {
   name: string;
   key: string;
   description?: string | null;
+  colorAccent?: string | null;
   workspaceId: string;
   ownerName?: string | null;
   guideName?: string | null;
@@ -75,6 +76,9 @@ export interface LocalPage {
   content?: any;
   isDiary: boolean;
   diaryDate?: Date | null;
+  layout?: "centered" | "full" | string | null;
+  fontFamily?: "sans" | "serif" | "mono" | string | null;
+  fontSize?: "small" | "normal" | string | null;
   secretToken?: string | null;
   workspaceId: string;
   parentId?: string | null;
