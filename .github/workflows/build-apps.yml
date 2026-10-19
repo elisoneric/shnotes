@@ -1,0 +1,77 @@
+name: Build Desktop & Android Binaries
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "electron/**"
+      - "android/**"
+      - "capacitor.config.json"
+      - ".github/workflows/build-apps.yml"
+
+jobs:
+  build-windows-exe:
+    name: Build Windows Desktop (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Package Windows Executable
+        run: |
+          npx --yes @electron/packager ./electron ShNotes --platform=win32 --arch=x64 --out=dist-desktop --overwrite --electron-version=33.2.0
+          copy electron\config.json dist-desktop\ShNotes-win32-x64\config.json
+
+      - name: Archive Windows Desktop Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShNotes-Windows-Desktop-x64
+          path: dist-desktop/ShNotes-win32-x64/
+
+  build-android-apk:
+    name: Build Android Mobile (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Build Debug APK with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShNotes-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk

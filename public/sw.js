@@ -1,5 +1,5 @@
-const CACHE_NAME = "shnotes-v1";
-const ASSETS_TO_CACHE = ["/", "/manifest.json", "/globals.css"];
+const CACHE_NAME = "shnotes-v2";
+const ASSETS_TO_CACHE = ["/manifest.json", "/globals.css"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -25,17 +25,39 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+  if (event.data === "PURGE_CACHE") {
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+  }
+});
+
 self.addEventListener("fetch", (event) => {
-  // Pass API requests directly to network; let Dexie / sync manager handle data offline
+  // Pass API requests directly to network; let Dexie / sync manager handle offline data
   if (event.request.url.includes("/api/")) {
     return;
   }
 
+  // Network-first for HTML navigations so server upgrades are discovered immediately
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(event.request).then((cached) => {
+          return cached || caches.match("/");
+        });
+      })
+    );
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request).then((cached) => {
-        return cached || caches.match("/");
-      });
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request);
+    }).catch(() => {
+      return caches.match("/");
     })
   );
 });

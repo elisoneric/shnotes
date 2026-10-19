@@ -1,5 +1,6 @@
-// Electron preload script for ShNotes
-window.addEventListener("DOMContentLoaded", () => {
-  // Expose platform metadata if needed
-  window.__IS_ELECTRON__ = true;
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  isElectron: true,
+  triggerDesktopUpgradeRefresh: () => ipcRenderer.invoke("trigger-desktop-upgrade-refresh"),
 });

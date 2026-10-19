@@ -1,0 +1,11 @@
+{
+  "name": "shnotes-desktop",
+  "version": "1.0.0",
+  "description": "ShNotes Enterprise Governance Desktop Client",
+  "main": "main.js",
+  "author": "eSam Creative Technologies LTD",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

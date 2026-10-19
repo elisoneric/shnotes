@@ -9,6 +9,7 @@ import { DiaryView } from "@/components/diary/DiaryView";
 import { AiChatDrawer } from "@/components/ai/AiChatDrawer";
 import { IosInstallModal } from "@/components/pwa/IosInstallModal";
 import { RegisterSw } from "@/components/pwa/RegisterSw";
+import { UpdateNotifier } from "@/components/pwa/UpdateNotifier";
 import { WorkspaceRole } from "@prisma/client";
 import { CreateProjectModal } from "@/components/projects/CreateProjectModal";
 import { ProfileSettingsModal } from "@/components/settings/ProfileSettingsModal";
@@ -222,6 +223,7 @@ export function Shell({ initialUser }: ShellProps = {}) {
     <div className="flex h-screen w-screen overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased font-sans">
       <RegisterSw />
       <IosInstallModal />
+      <UpdateNotifier />
 
       {/* LEFT SIDEBAR */}
       <aside

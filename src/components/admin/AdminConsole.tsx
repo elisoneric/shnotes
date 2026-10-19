@@ -460,32 +460,47 @@ export function AdminConsole({
         {/* TAB 3: PWA & APPS */}
         {activeTab === "APPS" && (
           <div className="space-y-6">
+            {/* Auto Upgrade & Cache Policy */}
+            <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-emerald-500" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                  Automated Upgrade & Hard Refresh Policy
+                </h3>
+              </div>
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                All deployed clients (Desktop Windows .exe, Android APK, and PWA browsers) continuously monitor the server build identifier via the version endpoint. When a new release is deployed, clients automatically purge their local cache and perform a hard refresh. If no upgrade has been deployed, no reload occurs.
+              </p>
+            </div>
+
+            {/* Desktop Windows Executable */}
             <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-sm space-y-4">
               <div className="flex items-center gap-2">
                 <Monitor className="w-4 h-4 text-zinc-500" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                  Web & Desktop App (PWA & .exe)
+                  Windows Desktop Application (.exe)
                 </h3>
               </div>
               <p className="text-xs text-zinc-500 leading-relaxed">
-                Install as a standalone desktop app on Windows or macOS directly from Chrome/Edge via the install prompt, or package a native Windows executable (.exe).
+                Packaged with Electron. Runs as a dedicated native desktop window with native window controls, offline Dexie persistence, and automated server upgrade detection.
               </p>
-              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs font-mono text-zinc-700 dark:text-zinc-300">
+              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs font-mono text-zinc-700 dark:text-zinc-300 select-all">
                 npm run package:exe
               </div>
             </div>
 
+            {/* Android APK */}
             <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-sm space-y-4">
               <div className="flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-zinc-500" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                  Android App (.apk)
+                  Android Mobile Application (.apk)
                 </h3>
               </div>
               <p className="text-xs text-zinc-500 leading-relaxed">
-                Add to your mobile home screen with offline capability, or package an installable Android APK with Capacitor.
+                Packaged with Capacitor. Runs fullscreen on Android phones and tablets, connects to your server, and auto-refreshes when updates are deployed without reinstalling the APK.
               </p>
-              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs font-mono text-zinc-700 dark:text-zinc-300">
+              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs font-mono text-zinc-700 dark:text-zinc-300 select-all">
                 npm run package:apk
               </div>
             </div>
