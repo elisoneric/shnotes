@@ -18,6 +18,7 @@ import {
   ToggleLeft,
   ToggleRight,
   LogOut,
+  Trash2,
 } from "lucide-react";
 import { SmtpAdminPanel } from "@/components/admin/SmtpAdminPanel";
 
@@ -29,6 +30,12 @@ export function SystemAdminPage({ onSignOut }: SystemAdminPageProps) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Database Reset State
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetInput, setResetInput] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetStatus, setResetStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
   const fetchMetrics = async () => {
     setLoading(true);
@@ -62,6 +69,36 @@ export function SystemAdminPage({ onSignOut }: SystemAdminPageProps) {
       window.location.href = "/login";
     } catch {
       window.location.href = "/login";
+    }
+  };
+
+  const handleExecuteReset = async () => {
+    if (resetInput.trim() !== "RESET") return;
+
+    setResetting(true);
+    setResetStatus(null);
+
+    try {
+      const res = await fetch("/api/admin/system/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "CONFIRM_RESET_ALL_DATA" }),
+      });
+
+      const json = await res.json();
+
+      if (res.ok && json.ok) {
+        setResetStatus({ ok: true, message: json.message });
+        setResetModalOpen(false);
+        setResetInput("");
+        await fetchMetrics();
+      } else {
+        setResetStatus({ ok: false, message: json.error || "Reset failed." });
+      }
+    } catch (err: any) {
+      setResetStatus({ ok: false, message: err.message || "Failed to trigger reset." });
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -277,7 +314,110 @@ export function SystemAdminPage({ onSignOut }: SystemAdminPageProps) {
             ))}
           </div>
         </div>
+
+        {/* Danger Zone: Factory Database Purge Card */}
+        <div className="rounded-xl border border-rose-900/60 bg-rose-950/20 p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <h2 className="text-sm font-bold text-rose-200 uppercase tracking-wider">
+                  Danger Zone: Factory Database Purge & Fresh Start
+                </h2>
+              </div>
+              <p className="text-xs text-zinc-400">
+                Permanently wipes all tenant workspaces, users, projects, tasks, comments, and document canvases. Preserves working SMTP settings and re-seeds fresh administrative state.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setResetModalOpen(true);
+                setResetInput("");
+                setResetStatus(null);
+              }}
+              className="text-xs font-semibold px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition-colors flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer self-start sm:self-auto"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset Database</span>
+            </button>
+          </div>
+
+          {resetStatus && (
+            <div
+              className={`p-3.5 rounded-lg border text-xs flex items-center gap-2 ${
+                resetStatus.ok
+                  ? "border-emerald-800 bg-emerald-950/40 text-emerald-300"
+                  : "border-rose-800 bg-rose-950/40 text-rose-300"
+              }`}
+            >
+              {resetStatus.ok ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{resetStatus.message}</span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+            <div className="space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-rose-950/80 border border-rose-800/80 flex items-center justify-center text-rose-400">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-zinc-100">
+                Confirm Complete Database Purge
+              </h3>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                This action is irreversible. All workspaces, users, notes, and tasks will be erased. The system will immediately re-seed a fresh root administrator account. Your SMTP settings will be preserved.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-zinc-300">
+                Type <span className="font-mono text-rose-400 font-bold">RESET</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={resetInput}
+                onChange={(e) => setResetInput(e.target.value)}
+                placeholder="RESET"
+                className="w-full text-xs px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-rose-700 font-mono"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setResetModalOpen(false)}
+                disabled={resetting}
+                className="text-xs font-medium px-3.5 py-2 rounded-lg border border-zinc-800 hover:bg-zinc-800 text-zinc-300 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteReset}
+                disabled={resetting || resetInput.trim() !== "RESET"}
+                className="text-xs font-semibold px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                {resetting ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>{resetting ? "Purging & Re-seeding..." : "Purge Database Now"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

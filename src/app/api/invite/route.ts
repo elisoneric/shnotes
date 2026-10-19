@@ -63,6 +63,29 @@ export async function POST(req: Request) {
           select: { title: true },
         });
         if (page?.title) pageTitle = page.title;
+
+        // If user already exists in workspace, register them immediately as a document collaborator
+        const existingStaff = await prisma.user.findUnique({
+          where: { email: cleanEmail },
+        });
+        if (existingStaff) {
+          await prisma.pageCollaborator.upsert({
+            where: {
+              pageId_userId: {
+                pageId,
+                userId: existingStaff.id,
+              },
+            },
+            create: {
+              pageId,
+              userId: existingStaff.id,
+              role: role as WorkspaceRole,
+            },
+            update: {
+              role: role as WorkspaceRole,
+            },
+          });
+        }
       }
 
       const emailResult = await sendDocumentInviteEmail({

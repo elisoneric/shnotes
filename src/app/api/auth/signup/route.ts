@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword, createSession, COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth";
 import { WorkspaceRole, TaskStage, TaskPriority } from "@prisma/client";
 import { ensureSeedData } from "@/lib/seed";
+import { sendWelcomeEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +120,14 @@ export async function POST(req: Request) {
       maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
       path: "/",
     });
+
+    // Dispatch welcome onboarding email
+    sendWelcomeEmail({
+      to: result.user.email,
+      name: result.user.name,
+      workspaceName: result.workspace.name,
+      role: result.user.role,
+    }).catch(() => {});
 
     return NextResponse.json({
       ok: true,

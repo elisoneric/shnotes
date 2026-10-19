@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { ensureSeedData } from "@/lib/seed";
 import { CommentType, TaskStage } from "@prisma/client";
+import { recordDocumentEdit, processPendingDocumentNotifications } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -146,6 +147,13 @@ export async function POST(req: Request) {
                   version: { increment: 1 },
                 },
               });
+
+              // Record session for quiet-window consolidated change notifications
+              recordDocumentEdit({
+                pageId: entityId,
+                editorId: currentUser.id,
+                editorName: currentUser.name || currentUser.email,
+              }).catch(() => {});
             } else {
               const targetWsId = payload.workspaceId && workspaceIds.includes(payload.workspaceId)
                 ? payload.workspaceId
@@ -234,6 +242,9 @@ export async function POST(req: Request) {
         console.warn(`[Sync] Failed to apply mutation ${m.clientMutationId}:`, err);
       }
     }
+
+    // Flush any pending document sessions that have reached the quiet window
+    processPendingDocumentNotifications().catch(() => {});
 
     // Pull Phase: Fetch Server Deltas scoped to user's workspaces
     const sinceDate = lastSyncedAt ? new Date(lastSyncedAt) : new Date(0);

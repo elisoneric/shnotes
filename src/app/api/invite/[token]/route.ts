@@ -5,6 +5,7 @@ import { hashPassword, createSession, getSessionUser, COOKIE_NAME, SESSION_TTL_D
 import { WorkspaceRole, TaskStage, TaskPriority } from "@prisma/client";
 import { ensureSeedData } from "@/lib/seed";
 import crypto from "crypto";
+import { sendWelcomeEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         },
       });
       targetUserId = newUser.id;
+
+      // Dispatch welcome onboarding email
+      sendWelcomeEmail({
+        to: newUser.email,
+        name: newUser.name,
+        workspaceName: invite.workspace?.name,
+        role: invite.role,
+      }).catch(() => {});
 
       // When invited to a specific note, the user starts fresh in their own workspace
       if (invite.pageId) {

@@ -295,3 +295,88 @@ export async function sendDocumentInviteEmail(params: {
     return { ok: false, reason: err.message };
   }
 }
+
+/**
+ * Dispatches an enterprise welcome onboarding email to a new user or team member.
+ */
+export async function sendWelcomeEmail(params: {
+  to: string;
+  name: string;
+  workspaceName?: string;
+  role?: string;
+}): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const config = await getSmtpConfig();
+
+    if (!config.host) {
+      console.log("[Welcome Email] SMTP unconfigured; skipping welcome email delivery.");
+      return { ok: false, reason: "SMTP_NOT_CONFIGURED" };
+    }
+
+    const transporter = createTransporter(config);
+    const appUrl = config.appUrl || "https://note.esam.com.ng";
+    const workspaceName = params.workspaceName || "Trust Bricks";
+    const roleName = params.role ? params.role.replace(/_/g, " ") : "Member";
+
+    await transporter.sendMail({
+      from: normalizeSenderAddress(config.from, config.user),
+      to: params.to.trim(),
+      subject: `Welcome to ShNotes – Your Governed Engineering Workspace`,
+      text: `Welcome to ShNotes, ${params.name}!\n\nYour account has been set up with access to the ${workspaceName} workspace as ${roleName}.\n\nAccess your workspace at: ${appUrl}/app\n\nFeatures available to you:\n- High-density governed Kanban & delivery workflows\n- Block-based rich notes with 256-bit cryptographic sharing\n- Offline-first local mutations with Dexie sync`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px 16px; min-height: 100%;">
+          <div style="max-width: 540px; margin: 0 auto; background-color: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
+            <div style="display: flex; align-items: center; margin-bottom: 24px;">
+              <span style="font-size: 16px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">ShNotes</span>
+              <span style="background-color: #064e3b; color: #34d399; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-left: 10px; border: 1px solid #059669;">GOVERNED WORKSPACE</span>
+            </div>
+
+            <h1 style="font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.3; margin-top: 0; margin-bottom: 12px;">
+              Welcome to ShNotes, ${params.name}
+            </h1>
+
+            <p style="font-size: 14px; color: #a1a1aa; line-height: 1.6; margin-bottom: 24px;">
+              Your account has been successfully provisioned. You have full access to collaborate, manage engineering deliveries, and document specifications.
+            </p>
+
+            <div style="background-color: #09090b; border: 1px solid #27272a; border-radius: 10px; padding: 18px; margin-bottom: 28px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span style="font-size: 12px; color: #71717a;">Workspace</span>
+                <span style="font-size: 12px; font-weight: 600; color: #f4f4f5;">${workspaceName}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span style="font-size: 12px; color: #71717a;">Assigned Role</span>
+                <span style="font-size: 12px; font-weight: 600; color: #3b82f6;">${roleName}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="font-size: 12px; color: #71717a;">Login Email</span>
+                <span style="font-size: 12px; font-mono; color: #a1a1aa;">${params.to}</span>
+              </div>
+            </div>
+
+            <div style="text-align: center; margin-bottom: 28px;">
+              <a href="${appUrl}/app" style="display: inline-block; background-color: #ffffff; color: #09090b; font-size: 13px; font-weight: 700; padding: 12px 30px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 10px rgba(255,255,255,0.15);">
+                Enter Your Workspace
+              </a>
+            </div>
+
+            <div style="border-top: 1px solid #27272a; padding-top: 20px; margin-top: 24px;">
+              <h3 style="font-size: 12px; font-weight: 600; color: #d4d4d8; margin-top: 0; margin-bottom: 8px;">Key Capabilities</h3>
+              <ul style="font-size: 12px; color: #a1a1aa; padding-left: 18px; line-height: 1.6; margin: 0;">
+                <li>Governed engineering delivery stages with role-based QA sign-offs</li>
+                <li>Live block canvas with 256-bit cryptographic public links</li>
+                <li>Offline local mutation outbox with Dexie IndexedDB sync</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+
+    return { ok: true };
+  } catch (err: any) {
+    console.error("[Welcome Email Error]:", err);
+    return { ok: false, reason: err.message };
+  }
+}
+
