@@ -4,21 +4,30 @@
 FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
+
+# Force development environment so npm never skips devDependencies required to build (TypeScript, Prisma CLI, Tailwind)
+ENV NODE_ENV=development
+
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
+
 RUN --mount=type=cache,target=/root/.npm \
-    if [ -f package-lock.json ]; then npm ci; else npm install; fi
+    if [ -f package-lock.json ]; then npm ci --include=dev; else npm install --include=dev; fi
 
 # ───────── 2. build ─────────
 FROM node:22-alpine AS builder
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
+
+ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Dummy URL: only needed so Prisma/Next validation passes at build time without live DB
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
 RUN npx prisma generate
-# Dummy URL: only needed so Prisma/Next don't fail at build time
-ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 RUN npm run build
 
 # ───────── 3. runtime ─────────
@@ -30,7 +39,7 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-# Prisma CLI isolated for `migrate deploy` (standalone output does not ship it)
+# Prisma CLI isolated for `migrate deploy` in production container
 ARG PRISMA_VERSION=6.5.0
 RUN mkdir -p /opt/prisma && cd /opt/prisma \
     && npm init -y >/dev/null && npm install --omit=dev prisma@${PRISMA_VERSION} \
