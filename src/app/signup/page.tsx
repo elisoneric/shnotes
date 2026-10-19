@@ -60,7 +60,7 @@ export default function SignupPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">Create Account</h1>
-            <p className="text-xs text-zinc-500">Access your governed engineering workspace</p>
+            <p className="text-xs text-zinc-500">Fast, local-first notes and team collaboration</p>
           </div>
         </div>
       </div>
@@ -77,7 +77,7 @@ export default function SignupPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Full Name *
+                Name *
               </label>
               <div className="relative">
                 <User className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -86,7 +86,7 @@ export default function SignupPage() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Full name"
+                  placeholder="Your name"
                   className="w-full text-xs pl-9 pr-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
@@ -94,7 +94,7 @@ export default function SignupPage() {
 
             <div>
               <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Work Email Address *
+                Email Address *
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -103,7 +103,7 @@ export default function SignupPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="name@example.com"
                   className="w-full text-xs pl-9 pr-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
@@ -121,7 +121,7 @@ export default function SignupPage() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create secure password (8+ characters)"
+                  placeholder="Create password (8+ characters)"
                   className="w-full text-xs pl-9 pr-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
@@ -132,7 +132,7 @@ export default function SignupPage() {
               disabled={loading}
               className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm mt-4 cursor-pointer"
             >
-              <span>{loading ? "Creating Account..." : "Create Account & Enter"}</span>
+              <span>{loading ? "Creating Account..." : "Create Account"}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </form>
