@@ -351,7 +351,7 @@ export function WorkspaceSettings({
       {activeTab === "ACCESS_MATRIX" && (
         <div className="space-y-4">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Control which operational project portals (e.g., Equity Portal, HR Portal) each staff member can access, and define their role level in each stream.
+            Control which operational project portals each staff member can access, and define their role level in each stream.
           </p>
 
           <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-x-auto">
