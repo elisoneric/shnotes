@@ -12,11 +12,13 @@ import {
   Filter,
   CheckCircle2,
   Clock,
-  Code2,
+  Layers,
   FileCheck2,
-  ShieldAlert,
+  ShieldCheck,
   ArrowRight,
   FolderGit2,
+  UserCheck,
+  Compass,
 } from "lucide-react";
 
 interface TaskBoardProps {
@@ -27,13 +29,13 @@ interface TaskBoardProps {
 }
 
 const COLUMNS: { stage: TaskStage; title: string; subtitle: string; roleTag: string }[] = [
-  { stage: "PROPOSED", title: "Proposed", subtitle: "Awaiting Triage", roleTag: "HOO" },
-  { stage: "TA_REVIEW", title: "TA Review", subtitle: "Spec Verification", roleTag: "TA" },
-  { stage: "DEV_ASSESSMENT", title: "Dev Assessment", subtitle: "Architecture & Effort", roleTag: "Dev" },
-  { stage: "CONFIRMED_READY", title: "Confirmed", subtitle: "Scope Locked", roleTag: "HOO / TA" },
-  { stage: "IN_PROGRESS", title: "In Progress", subtitle: "Active Development", roleTag: "Dev" },
-  { stage: "READY_FOR_TESTING", title: "Ready for QA", subtitle: "Staging Demo & Notes", roleTag: "Dev" },
-  { stage: "APPROVED_CLEARED", title: "Approved", subtitle: "Cleared to Archive", roleTag: "HOO" },
+  { stage: "PROPOSED", title: "Proposed", subtitle: "Awaiting Triage", roleTag: "Initiator" },
+  { stage: "TA_REVIEW", title: "Under Review", subtitle: "Review & Alignment", roleTag: "Guide / Reviewer" },
+  { stage: "DEV_ASSESSMENT", title: "Plan & Scope", subtitle: "Methodology & Effort", roleTag: "Specialist" },
+  { stage: "CONFIRMED_READY", title: "Confirmed", subtitle: "Scope Approved", roleTag: "Approver" },
+  { stage: "IN_PROGRESS", title: "In Progress", subtitle: "Active Execution", roleTag: "Assignee" },
+  { stage: "READY_FOR_TESTING", title: "Verification", subtitle: "Deliverables & Review", roleTag: "Reviewer" },
+  { stage: "APPROVED_CLEARED", title: "Completed", subtitle: "Final Sign-off", roleTag: "Approver" },
 ];
 
 export function TaskBoard({ currentProject, currentRole, currentUserId, currentUserName }: TaskBoardProps) {
@@ -95,10 +97,8 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
       updatedAt: new Date(),
     };
 
-    // 1. Optimistic write to local IndexedDB
     await localDb.tasks.add(taskItem);
 
-    // 2. Queue for server sync
     await syncManager.queueMutation("task", newId, "UPSERT", {
       projectId: currentProject.id,
       title: newTitle.trim(),
@@ -124,10 +124,10 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/20">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/20 font-sans">
       {/* Top Filter & Action Bar */}
       <div className="px-6 py-3.5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <FolderGit2 className="w-5 h-5 text-zinc-500" />
             <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
@@ -139,6 +139,21 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
               </span>
             )}
           </div>
+
+          {currentProject?.ownerName && (
+            <div className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500 font-medium border-l border-zinc-200 dark:border-zinc-800 pl-3">
+              <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Owner: <strong className="text-zinc-700 dark:text-zinc-300 font-semibold">{currentProject.ownerName}</strong></span>
+            </div>
+          )}
+
+          {currentProject?.guideName && (
+            <div className="hidden lg:flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
+              <Compass className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Guide: <strong className="text-zinc-700 dark:text-zinc-300 font-semibold">{currentProject.guideName}</strong></span>
+            </div>
+          )}
+
           <span className="text-xs text-zinc-400">•</span>
           <span className="text-xs text-zinc-500 font-medium">{filteredTasks.length} governed tasks</span>
         </div>
@@ -151,7 +166,7 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter tasks by key or title..."
+              placeholder="Search by key or title"
               className="text-xs pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 w-48 sm:w-60"
             />
           </div>
@@ -175,7 +190,7 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
             className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Raise Task (HOO)</span>
+            <span>Raise Task</span>
           </button>
         </div>
       </div>
@@ -211,7 +226,7 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
               <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
                 {colTasks.length === 0 ? (
                   <div className="py-8 text-center border border-dashed border-zinc-200 dark:border-zinc-800/60 rounded-lg text-xs text-zinc-400">
-                    No tasks in {col.title}
+                    No items in {col.title}
                   </div>
                 ) : (
                   colTasks.map((t) => {
@@ -246,7 +261,6 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
           }}
           onTaskUpdated={() => {
             loadData();
-            // Refresh selected task reference from local DB
             localDb.tasks.get(selectedTask.id).then((t) => {
               if (t) setSelectedTask(t);
             });
@@ -254,7 +268,7 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
         />
       )}
 
-      {/* Raise New Task Modal (HOO) */}
+      {/* Raise New Task Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-sm animate-in fade-in duration-150">
           <form
@@ -263,7 +277,7 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
           >
             <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
               <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                <span>Raise New Operational Task</span>
+                <span>Raise New Initiative or Task</span>
                 {currentProject && (
                   <span className="font-mono text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold">
                     {currentProject.key}
@@ -286,19 +300,19 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
                 required
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g. Cap Table Snapshot Export for Audit"
+                placeholder="Task title"
                 className="w-full text-xs p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Operational Need & Business Rationale (HOO)
+                Objective & Business Requirements
               </label>
               <textarea
                 value={newDesc}
                 onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="Explain the operational problem, user story, and expected business outcome..."
+                placeholder="Business objective and operational requirements"
                 rows={3}
                 className="w-full text-xs p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
@@ -328,9 +342,9 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
               </button>
               <button
                 type="submit"
-                className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90"
+                className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 shadow-sm"
               >
-                Raise Task (Ball-in-Court: HOO)
+                Submit Initiative
               </button>
             </div>
           </form>

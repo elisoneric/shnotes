@@ -97,7 +97,7 @@ You can log daily standup notes and sprint updates in the Daily Diary section.`;
 You can ask me to:
 1. Summarize open tasks across all projects
 2. Check diary logs and operations records
-3. Review technical recommendations for any task (e.g., "EQ-101")`;
+3. Review technical recommendations for any task such as "EQ-101"`;
     }
 
     return NextResponse.json({ ok: true, reply: fallbackReply });

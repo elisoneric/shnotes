@@ -41,8 +41,8 @@ export function Shell() {
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 
   // User & Role State (Defaults to HOO / Director for demoing governance, switchable in UI)
-  const [currentRole, setCurrentRole] = useState<WorkspaceRole>("HOO");
-  const [userName, setUserName] = useState("Director / HOO");
+  const [currentRole, setCurrentRole] = useState<WorkspaceRole>("OWNER");
+  const [userName, setUserName] = useState("Project Owner (Final Authority)");
   const [userId, setUserId] = useState("user_admin");
 
   // UI state
@@ -304,15 +304,17 @@ export function Shell() {
                 onChange={(e) => {
                   const role = e.target.value as WorkspaceRole;
                   setCurrentRole(role);
-                  if (role === "HOO") setUserName("Director / HOO");
-                  if (role === "TECH_ASSISTANT") setUserName("Alex (Tech Assistant)");
-                  if (role === "DEVELOPER") setUserName("Lead Engineer (Developer)");
+                  if (role === "OWNER" || role === "HOO") setUserName("Project Owner (Final Authority)");
+                  if (role === "REVIEWER_GUIDE" || role === "TECH_ASSISTANT") setUserName("Project Guide / Lead Reviewer");
+                  if (role === "CONTRIBUTOR" || role === "DEVELOPER") setUserName("Specialist / Developer");
+                  if (role === "VIEWER") setUserName("Auditor / Observer");
                 }}
                 className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 focus:outline-none"
               >
-                <option value="HOO">Head of Operations (HOO)</option>
-                <option value="TECH_ASSISTANT">Technical Assistant (TA)</option>
-                <option value="DEVELOPER">Developer (Architecture & Code)</option>
+                <option value="OWNER">Project Owner (Final Authority)</option>
+                <option value="REVIEWER_GUIDE">Project Guide / Lead Reviewer</option>
+                <option value="CONTRIBUTOR">Specialist / Developer</option>
+                <option value="VIEWER">Auditor / Observer</option>
               </select>
             </div>
           </div>

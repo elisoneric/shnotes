@@ -10,17 +10,17 @@ import {
   Clock,
   ArrowRight,
   ShieldCheck,
-  Code2,
   FileCheck2,
   Sparkles,
   Send,
   MessageSquare,
   History,
   Lock,
-  ExternalLink,
   ChevronRight,
   User,
-  AlertTriangle,
+  Layers,
+  FileText,
+  BadgeCheck,
 } from "lucide-react";
 
 interface TaskGovernanceModalProps {
@@ -33,14 +33,14 @@ interface TaskGovernanceModalProps {
   onTaskUpdated: () => void;
 }
 
-const STAGES: { key: TaskStage; label: string; role: string }[] = [
-  { key: "PROPOSED", label: "Proposed", role: "HOO" },
-  { key: "TA_REVIEW", label: "TA Review", role: "TA" },
-  { key: "DEV_ASSESSMENT", label: "Dev Assessment", role: "Dev" },
-  { key: "CONFIRMED_READY", label: "Confirmed", role: "HOO / TA" },
-  { key: "IN_PROGRESS", label: "In Progress", role: "Dev" },
-  { key: "READY_FOR_TESTING", label: "Ready for QA", role: "Dev" },
-  { key: "APPROVED_CLEARED", label: "Approved & Cleared", role: "HOO" },
+const STAGES: { key: TaskStage; label: string; authorityTag: string }[] = [
+  { key: "PROPOSED", label: "Proposed", authorityTag: "Initiator" },
+  { key: "TA_REVIEW", label: "Under Review", authorityTag: "Guide / Reviewer" },
+  { key: "DEV_ASSESSMENT", label: "Plan & Scope", authorityTag: "Specialist / Dev" },
+  { key: "CONFIRMED_READY", label: "Scope Confirmed", authorityTag: "Approver / Guide" },
+  { key: "IN_PROGRESS", label: "In Progress", authorityTag: "Assignee" },
+  { key: "READY_FOR_TESTING", label: "Verification", authorityTag: "Reviewer" },
+  { key: "APPROVED_CLEARED", label: "Completed & Approved", authorityTag: "Final Sign-off" },
 ];
 
 export function TaskGovernanceModal({
@@ -52,7 +52,6 @@ export function TaskGovernanceModal({
   onClose,
   onTaskUpdated,
 }: TaskGovernanceModalProps) {
-  // Local editable state for governed fields
   const [taNotes, setTaNotes] = useState(task.taReviewNotes || "");
   const [devRec, setDevRec] = useState(task.devRecommendation || "");
   const [qaNotes, setQaNotes] = useState(task.qaTestNotes || "");
@@ -60,7 +59,6 @@ export function TaskGovernanceModal({
   const [newComment, setNewComment] = useState("");
   const [commentFilter, setCommentFilter] = useState<"ALL" | "AUDIT" | "TECH">("ALL");
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"GOVERNANCE" | "COMMENTS">("GOVERNANCE");
 
   const currentStageIndex = STAGES.findIndex((s) => s.key === task.stage);
 
@@ -73,6 +71,7 @@ export function TaskGovernanceModal({
       devRecommendation: devRec,
       qaTestNotes: qaNotes,
       approvalSignoffNote: signoffNote,
+      signoffByName: nextStage === "APPROVED_CLEARED" ? currentUserName : task.signoffByName,
       updatedAt: new Date(),
       version: task.version + 1,
       ...extraFields,
@@ -89,7 +88,7 @@ export function TaskGovernanceModal({
       userName: currentUserName,
       userRole: currentRole,
       type: "STAGE_CHANGE_AUDIT",
-      content: `Ball-in-Court transition: Moved stage to ${nextStage.replace(/_/g, " ")}.`,
+      content: `Governance transition: Stage moved to ${nextStage.replace(/_/g, " ").toLowerCase()} by ${currentUserName}.`,
       version: 1,
       createdAt: new Date(),
     };
@@ -102,13 +101,13 @@ export function TaskGovernanceModal({
       devRecommendation: devRec,
       qaTestNotes: qaNotes,
       approvalSignoffNote: signoffNote,
+      signoffByName: nextStage === "APPROVED_CLEARED" ? currentUserName : task.signoffByName,
       ...extraFields,
     });
 
     onTaskUpdated();
   };
 
-  // Submit comment
   const handleAddComment = async (type: CommentType = "STANDARD_CHAT") => {
     if (!newComment.trim()) return;
 
@@ -135,7 +134,6 @@ export function TaskGovernanceModal({
     onTaskUpdated();
   };
 
-  // Indunix AI Triggers
   const triggerAiAction = async (action: "draft-recommendation" | "qa-checklist" | "summarize-thread") => {
     setIsAiLoading(true);
     try {
@@ -160,12 +158,11 @@ export function TaskGovernanceModal({
         } else if (action === "qa-checklist" && data.result) {
           setQaNotes(data.result);
         } else if (action === "summarize-thread" && data.result) {
-          // Append summary to chat thread
           const summaryComment: LocalTaskComment = {
             id: `comm_ai_${Date.now()}`,
             taskId: task.id,
             userId: currentUserId,
-            userName: "Indunix AI Copilot",
+            userName: "Indunix Assistant",
             type: "AI_COPILOT_OUTPUT",
             content: data.result,
             version: 1,
@@ -176,7 +173,7 @@ export function TaskGovernanceModal({
         }
       }
     } catch (err) {
-      console.warn("AI copilot error:", err);
+      console.warn("AI action issue:", err);
     } finally {
       setIsAiLoading(false);
     }
@@ -190,18 +187,18 @@ export function TaskGovernanceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-zinc-950/70 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden font-sans">
         {/* Header Bar */}
         <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50">
           <div className="flex items-center gap-3">
             <span className="font-mono text-sm font-bold px-2.5 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
               {task.projectTaskId}
             </span>
-            <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">
+            <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {STAGES.find((s) => s.key === task.stage)?.label}
             </span>
-            <span className="text-xs px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 text-zinc-500">
-              Ball-in-Court: {STAGES.find((s) => s.key === task.stage)?.role}
+            <span className="text-xs px-2.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 text-zinc-500 font-medium">
+              Ball-in-Court: {STAGES.find((s) => s.key === task.stage)?.authorityTag}
             </span>
           </div>
 
@@ -242,34 +239,40 @@ export function TaskGovernanceModal({
           </div>
         </div>
 
-        {/* Main Body: 3-Tier Governance (Left) + Slack-in-a-Card Chat Drawer (Right) */}
+        {/* Main Body: 3 Governance Panels (Left) + Task Discussion Drawer (Right) */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-y-auto divide-y lg:divide-y-0 lg:divide-x divide-zinc-200 dark:divide-zinc-800">
-          {/* Left Column: The 3 Governance Panels (Span 7) */}
+          {/* Left Column: Governance Tiers */}
           <div className="lg:col-span-7 p-6 space-y-6 overflow-y-auto">
             <div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight mb-2">{task.title}</h2>
-              <div className="flex items-center gap-4 text-xs text-zinc-500">
+              <div className="flex items-center gap-4 text-xs text-zinc-500 font-medium">
                 <span className="flex items-center gap-1">
                   <User className="w-3.5 h-3.5" />
                   <span>Assignee: {task.assigneeName || "Unassigned"}</span>
                 </span>
                 <span>Priority: {task.priority}</span>
+                {task.signoffByName && (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <BadgeCheck className="w-3.5 h-3.5" />
+                    <span>Signed off by {task.signoffByName}</span>
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* TIER 1: HOO Request & Business Rationale Card */}
+            {/* TIER 1: Objective & Business Case */}
             <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-zinc-400" />
-                  <span>Tier 1: Operational Request (HOO / TA)</span>
+                  <span>Tier 1: Business Objective & Requirements</span>
                 </span>
                 {task.stage === "PROPOSED" && (
                   <button
                     onClick={() => transitionStage("TA_REVIEW")}
                     className="text-xs font-semibold px-2.5 py-1 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90"
                   >
-                    Accept for TA Review
+                    Accept for Review
                   </button>
                 )}
               </div>
@@ -278,15 +281,15 @@ export function TaskGovernanceModal({
                 {task.description || "No operational description provided."}
               </div>
 
-              {/* TA Review Notes Sub-box */}
+              {/* Review & Guidance Notes */}
               <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800">
                 <label className="block text-xs font-semibold text-zinc-500 mb-1">
-                  Technical Assistant (TA) Triage & Spec Notes:
+                  Reviewer & Guidance Notes:
                 </label>
                 <textarea
                   value={taNotes}
                   onChange={(e) => setTaNotes(e.target.value)}
-                  placeholder="Note dependencies, API considerations, or assign to developer..."
+                  placeholder="Review feedback, alignment notes, and dependencies"
                   rows={2}
                   className="w-full text-xs p-2.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
@@ -296,7 +299,7 @@ export function TaskGovernanceModal({
                       onClick={() => transitionStage("DEV_ASSESSMENT")}
                       className="text-xs font-semibold px-3 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center gap-1"
                     >
-                      <span>Assign & Send to Dev Assessment</span>
+                      <span>Assign & Request Execution Plan</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -304,12 +307,12 @@ export function TaskGovernanceModal({
               </div>
             </div>
 
-            {/* TIER 2: Developer Architecture & Recommendation Box */}
+            {/* TIER 2: Execution Methodology & Scope Box */}
             <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 p-4 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5">
-                  <Code2 className="w-4 h-4 text-blue-500" />
-                  <span>Tier 2: Developer Technical Recommendation & Scope</span>
+                  <Layers className="w-4 h-4 text-blue-500" />
+                  <span>Tier 2: Execution Methodology & Architecture Plan</span>
                 </span>
 
                 <button
@@ -318,25 +321,25 @@ export function TaskGovernanceModal({
                   className="text-xs font-medium px-2.5 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>{isAiLoading ? "Drafting..." : "AI Draft Recommendation"}</span>
+                  <span>{isAiLoading ? "Drafting..." : "AI Draft Methodology Plan"}</span>
                 </button>
               </div>
 
               <textarea
                 value={devRec}
                 onChange={(e) => setDevRec(e.target.value)}
-                placeholder="State your technical approach, database changes, trade-offs, and estimated days..."
+                placeholder="Methodology, technical approach, trade-offs, and estimated timeline"
                 rows={4}
                 className="w-full text-xs font-mono p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
 
-              {/* Action Buttons: Scope Approval and Lock */}
+              {/* Scope Approval Action */}
               <div className="flex items-center justify-between pt-2">
                 <div className="text-[11px] text-zinc-500">
                   {task.devConfirmedAt ? (
                     <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
                       <Lock className="w-3 h-3" />
-                      <span>Scope locked on {new Date(task.devConfirmedAt).toLocaleDateString()}</span>
+                      <span>Scope confirmed on {new Date(task.devConfirmedAt).toLocaleDateString()}</span>
                     </span>
                   ) : (
                     <span>Scope not yet confirmed</span>
@@ -349,10 +352,10 @@ export function TaskGovernanceModal({
                       onClick={() =>
                         transitionStage("CONFIRMED_READY", { devConfirmedAt: new Date(), devRecommendation: devRec })
                       }
-                      className="text-xs font-semibold px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                      className="text-xs font-semibold px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-1 shadow-sm"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Approve Scope & Lock (HOO / TA)</span>
+                      <span>Confirm & Lock Scope</span>
                     </button>
                   )}
 
@@ -361,19 +364,19 @@ export function TaskGovernanceModal({
                       onClick={() => transitionStage("IN_PROGRESS")}
                       className="text-xs font-semibold px-3 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90"
                     >
-                      Start Development (In Progress)
+                      Start Execution (In Progress)
                     </button>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* TIER 3: QA Verification, Staging Demo & Sign-off Box */}
+            {/* TIER 3: Quality Verification & Sign-off */}
             <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5">
                   <FileCheck2 className="w-4 h-4 text-emerald-500" />
-                  <span>Tier 3: QA Verification & Sign-off (HOO)</span>
+                  <span>Tier 3: Deliverables, Verification & Final Sign-off</span>
                 </span>
 
                 <button
@@ -382,14 +385,14 @@ export function TaskGovernanceModal({
                   className="text-xs font-medium px-2.5 py-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>AI Generate QA Checklist</span>
+                  <span>AI Generate Verification Criteria</span>
                 </button>
               </div>
 
               <textarea
                 value={qaNotes}
                 onChange={(e) => setQaNotes(e.target.value)}
-                placeholder="Staging demo URL, test credentials, and steps for the Head of Operations to test..."
+                placeholder="Verification instructions, staging credentials, and evidence deliverables"
                 rows={3}
                 className="w-full text-xs font-mono p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
@@ -398,9 +401,9 @@ export function TaskGovernanceModal({
                 {task.stage === "IN_PROGRESS" && (
                   <button
                     onClick={() => transitionStage("READY_FOR_TESTING", { qaTestNotes: qaNotes })}
-                    className="text-xs font-semibold px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1"
+                    className="text-xs font-semibold px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1 ml-auto"
                   >
-                    <span>Submit for Testing (Ready for QA)</span>
+                    <span>Submit for Verification</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -409,28 +412,29 @@ export function TaskGovernanceModal({
                   <button
                     onClick={() =>
                       transitionStage("APPROVED_CLEARED", {
-                        approvalSignoffNote: signoffNote || "Tested and accepted by HOO.",
+                        approvalSignoffNote: signoffNote || "Tested and verified for production sign-off.",
+                        signoffByName: currentUserName,
                         isArchived: true,
                       })
                     }
                     className="text-xs font-semibold px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-1.5 ml-auto shadow-sm"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Approve Acceptance & Clear to Archive</span>
+                    <span>Approve Acceptance & Final Sign-off</span>
                   </button>
                 )}
 
                 {task.stage === "APPROVED_CLEARED" && (
-                  <div className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  <div className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 ml-auto">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Task Cleared & Archived</span>
+                    <span>Verified & Archived</span>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Right Column: Embedded Task Conversation Drawer ("Slack-in-a-Card") (Span 5) */}
+          {/* Right Column: Discussion Thread Drawer */}
           <div className="lg:col-span-5 flex flex-col h-full bg-zinc-50/50 dark:bg-zinc-950/30">
             {/* Drawer Top Navigation & Filter */}
             <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
@@ -470,7 +474,7 @@ export function TaskGovernanceModal({
               <button
                 onClick={() => triggerAiAction("summarize-thread")}
                 disabled={isAiLoading || comments.length === 0}
-                title="AI Summarize Conversation"
+                title="AI Summarize Discussion"
                 className="text-xs p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors flex items-center gap-1"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -483,7 +487,7 @@ export function TaskGovernanceModal({
               {filteredComments.length === 0 ? (
                 <div className="text-center py-10 text-xs text-zinc-400">
                   <MessageSquare className="w-6 h-6 mx-auto mb-2 opacity-40" />
-                  <p>No comments in this filter yet.</p>
+                  <p>No discussion entries found.</p>
                 </div>
               ) : (
                 filteredComments.map((c) => {
@@ -522,7 +526,7 @@ export function TaskGovernanceModal({
               )}
             </div>
 
-            {/* Chat Input */}
+            {/* Discussion Input */}
             <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
               <div className="flex gap-2">
                 <input
@@ -530,7 +534,7 @@ export function TaskGovernanceModal({
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
-                  placeholder="Type a message or technical note..."
+                  placeholder="Add observation or message"
                   className="flex-1 text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
                 <button

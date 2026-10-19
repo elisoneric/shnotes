@@ -130,7 +130,7 @@ export function AiChatDrawer({ isOpen, onClose }: AiChatDrawerProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask AI about tasks, code, or diary..."
+            placeholder="Inquire about initiatives, deliverables, or operational records"
             className="flex-1 text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
           <button

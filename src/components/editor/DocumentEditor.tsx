@@ -205,7 +205,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           type="text"
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder="Untitled Document..."
+          placeholder="Document title"
           className="w-full text-3xl sm:text-4xl font-bold tracking-tight bg-transparent text-zinc-900 dark:text-zinc-50 border-none outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-700 mb-6"
         />
 
@@ -238,7 +238,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     type="text"
                     value={block.text || ""}
                     onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                    placeholder="Heading 1..."
+                    placeholder="Heading 1"
                     className="w-full text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-50 outline-none pt-4 pb-1"
                   />
                 )}
@@ -248,7 +248,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     type="text"
                     value={block.text || ""}
                     onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                    placeholder="Heading 2..."
+                    placeholder="Heading 2"
                     className="w-full text-xl font-semibold bg-transparent text-zinc-900 dark:text-zinc-100 outline-none pt-3 pb-1"
                   />
                 )}
@@ -257,7 +257,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                   <textarea
                     value={block.text || ""}
                     onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                    placeholder="Type '/' for commands or start typing..."
+                    placeholder="Type '/' for commands"
                     rows={1}
                     className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none leading-relaxed placeholder:text-zinc-400"
                   />
@@ -270,7 +270,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       type="text"
                       value={block.text || ""}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                      placeholder="List item..."
+                      placeholder="List item"
                       className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none"
                     />
                   </div>
@@ -288,7 +288,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       type="text"
                       value={block.text || ""}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                      placeholder="To-do item..."
+                      placeholder="To-do item"
                       className={`w-full text-sm bg-transparent outline-none ${
                         block.checked ? "line-through text-zinc-400 dark:text-zinc-500" : "text-zinc-800 dark:text-zinc-200"
                       }`}
@@ -302,7 +302,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     <textarea
                       value={block.text || ""}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                      placeholder="Callout text..."
+                      placeholder="Callout text"
                       rows={1}
                       className="w-full text-xs font-medium bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none"
                     />
@@ -315,7 +315,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       type="text"
                       value={block.text || ""}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                      placeholder="Empty quote..."
+                      placeholder="Quote text"
                       className="w-full text-sm italic bg-transparent text-zinc-600 dark:text-zinc-400 outline-none"
                     />
                   </div>
@@ -326,7 +326,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     <textarea
                       value={block.text || ""}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
-                      placeholder="// Code block..."
+                      placeholder="Code snippet"
                       rows={2}
                       className="w-full font-mono text-xs bg-transparent text-zinc-100 outline-none resize-none"
                     />

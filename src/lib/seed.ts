@@ -13,31 +13,31 @@ export async function ensureSeedData() {
     const password = process.env.ADMIN_PASSWORD || "TrustbricksPass123!";
     const passwordHash = hashPassword(password);
 
-    // 1. Create Users for the multi-role team
-    const adminUser = await prisma.user.create({
+    // 1. Create Enterprise Members
+    const ownerUser = await prisma.user.create({
       data: {
         email,
-        name: "Director / HOO",
+        name: "Director of Operations",
         passwordHash,
-        role: WorkspaceRole.HOO,
+        role: WorkspaceRole.OWNER,
       },
     });
 
-    const taUser = await prisma.user.create({
+    const guideUser = await prisma.user.create({
       data: {
-        email: "ta@trustbricks.com",
-        name: "Alex (Tech Assistant)",
+        email: "guide@trustbricks.com",
+        name: "Lead Reviewer & Guide",
         passwordHash,
-        role: WorkspaceRole.TECH_ASSISTANT,
+        role: WorkspaceRole.REVIEWER_GUIDE,
       },
     });
 
-    const devUser = await prisma.user.create({
+    const specialistUser = await prisma.user.create({
       data: {
-        email: "dev@trustbricks.com",
-        name: "Lead Engineer (Developer)",
+        email: "specialist@trustbricks.com",
+        name: "Principal Specialist / Developer",
         passwordHash,
-        role: WorkspaceRole.DEVELOPER,
+        role: WorkspaceRole.CONTRIBUTOR,
       },
     });
 
@@ -48,46 +48,50 @@ export async function ensureSeedData() {
         slug: "trustbricks",
         members: {
           create: [
-            { userId: adminUser.id, role: WorkspaceRole.HOO },
-            { userId: taUser.id, role: WorkspaceRole.TECH_ASSISTANT },
-            { userId: devUser.id, role: WorkspaceRole.DEVELOPER },
+            { userId: ownerUser.id, role: WorkspaceRole.OWNER },
+            { userId: guideUser.id, role: WorkspaceRole.REVIEWER_GUIDE },
+            { userId: specialistUser.id, role: WorkspaceRole.CONTRIBUTOR },
           ],
         },
       },
     });
 
-    // 3. Create Governed Projects
+    // 3. Create Enterprise Governed Projects with designated Owner & Guide
     const eqProject = await prisma.project.create({
       data: {
         name: "Equity Portal",
         key: "EQ",
         description: "Investor relations, shareholder register, cap table, and dividend ledger",
         workspaceId: workspace.id,
+        ownerName: "Director of Operations",
+        guideName: "Lead Reviewer & Guide",
       },
     });
 
     const hrProject = await prisma.project.create({
       data: {
-        name: "HR Portal",
+        name: "HR Operations Portal",
         key: "HR",
         description: "Employee attendance geofencing, leave workflows, and performance reviews",
         workspaceId: workspace.id,
+        ownerName: "Director of Operations",
+        guideName: "Lead Reviewer & Guide",
       },
     });
 
-    // 4. Create Initial Governed Tasks illustrating the 7-stage lifecycle
+    // 4. Create Initial Governed Tasks illustrating the 7-stage enterprise lifecycle
     const task1 = await prisma.task.create({
       data: {
         projectId: eqProject.id,
         projectTaskId: "EQ-101",
         title: "Automated Dividend Payout Disbursal Engine",
-        description: "HOO Request: We need a scheduled cron that calculates quarterly dividends for verified shareholders and produces payout batch files for bank approval.",
+        description: "Calculate quarterly dividends for verified shareholders and produce payout batch files for bank approval.",
         stage: TaskStage.DEV_ASSESSMENT,
         priority: TaskPriority.HIGH,
-        creatorId: adminUser.id,
-        assigneeId: devUser.id,
-        taReviewNotes: "TA Review: Verify integration with existing bank disbursement webhook API. Requires idempotent transaction IDs to avoid double payments.",
-        devRecommendation: "Architecture Suggestion: Implement a PostgreSQL transactional outbox table with idempotent batch hashing. Process 50 payouts per chunk with retry backoff. Estimated effort: 3 days.",
+        creatorId: ownerUser.id,
+        assigneeId: specialistUser.id,
+        taReviewNotes: "Review: Verify integration with existing disbursement API. Requires idempotent transaction IDs to avoid duplicate payments.",
+        devRecommendation: "Implementation Plan: Implement a transactional outbox table with idempotent batch hashing. Process 50 payouts per chunk with retry backoff. Estimated effort: 3 days.",
         order: 1.0,
       },
     });
@@ -95,34 +99,34 @@ export async function ensureSeedData() {
     await prisma.taskComment.create({
       data: {
         taskId: task1.id,
-        userId: adminUser.id,
+        userId: ownerUser.id,
         type: CommentType.STANDARD_CHAT,
-        content: "Target deadline for this is next Friday before board review.",
+        content: "Target deadline for this deliverable is scheduled before board review.",
       },
     });
 
     await prisma.taskComment.create({
       data: {
         taskId: task1.id,
-        userId: taUser.id,
+        userId: guideUser.id,
         type: CommentType.TA_SPEC_NOTE,
-        content: "Checked requirements. Approved to proceed with dev recommendation review.",
+        content: "Requirements verified. Approved to proceed with technical architecture review.",
       },
     });
 
-    const task2 = await prisma.task.create({
+    await prisma.task.create({
       data: {
         projectId: eqProject.id,
         projectTaskId: "EQ-102",
         title: "Two-Factor Authentication for Investor Portal",
-        description: "Enforce TOTP authenticator app verification for all shareholder account logins.",
+        description: "Enforce authenticator app verification for all shareholder account logins.",
         stage: TaskStage.READY_FOR_TESTING,
         priority: TaskPriority.URGENT,
-        creatorId: adminUser.id,
-        assigneeId: devUser.id,
-        taReviewNotes: "TA: Standard RFC 6238 TOTP with fallback recovery codes.",
-        devRecommendation: "Used native Node.js crypto for HMAC-SHA1 TOTP verification and encrypted backup codes.",
-        qaTestNotes: "Staging Preview: https://staging.trustbricks.com/auth/2fa\nTest Account: investor.demo@trustbricks.com / pass: Test2FA!123\nSteps: Log in, scan QR code with Google Authenticator, verify 6-digit pin.",
+        creatorId: ownerUser.id,
+        assigneeId: specialistUser.id,
+        taReviewNotes: "Standard RFC 6238 TOTP with fallback recovery codes.",
+        devRecommendation: "Cryptographic HMAC-SHA1 TOTP verification and encrypted backup codes implemented.",
+        qaTestNotes: "Staging Preview: https://staging.trustbricks.com/auth/2fa\nVerification Account: investor.demo@trustbricks.com / pass: Test2FA!123\nSteps: Log in, scan QR code with authenticator app, verify 6-digit pin.",
         order: 2.0,
       },
     });
@@ -135,7 +139,7 @@ export async function ensureSeedData() {
         description: "Restrict employee clock-in to within 100 meters of the office coordinates.",
         stage: TaskStage.PROPOSED,
         priority: TaskPriority.MEDIUM,
-        creatorId: adminUser.id,
+        creatorId: ownerUser.id,
         order: 1.0,
       },
     });
@@ -144,20 +148,20 @@ export async function ensureSeedData() {
     await prisma.page.create({
       data: {
         workspaceId: workspace.id,
-        title: "Engineering Governance Standard",
+        title: "Enterprise Governance Standard",
         content: {
           blocks: [
-            { id: "b1", type: "heading", level: 1, text: "Engineering Governance & Deployment Policy" },
-            { id: "b2", type: "paragraph", text: "All features and fixes must transition strictly through the 7-stage lifecycle before production rollout." },
-            { id: "b3", type: "callout", text: "Rule: No code development begins without locked Developer Technical Recommendations approved by the HOO or TA." },
-            { id: "b4", type: "heading", level: 2, text: "Ball-in-Court Lifecycle Stages" },
-            { id: "b5", type: "bullet", text: "Proposed: Logged by HOO with business rationale." },
-            { id: "b6", type: "bullet", text: "TA Review: Triage, edge cases, and developer assignment." },
-            { id: "b7", type: "bullet", text: "Dev Assessment: Technical recommendation, trade-offs, and architecture." },
-            { id: "b8", type: "bullet", text: "Confirmed: Scope formally approved and locked." },
-            { id: "b9", type: "bullet", text: "In Progress: Active development." },
-            { id: "b10", type: "bullet", text: "Ready for Testing: Staging preview, testing steps, and acceptance criteria submitted." },
-            { id: "b11", type: "bullet", text: "Approved / Cleared: HOO sign-off verification." },
+            { id: "b1", type: "heading", level: 1, text: "Enterprise Governance & Operational Sign-off Policy" },
+            { id: "b2", type: "paragraph", text: "All initiatives and deliverables transition through the 7-stage lifecycle to guarantee alignment and verified completion." },
+            { id: "b3", type: "callout", text: "Mandate: Execution begins once the methodology and scope are formally confirmed by the Project Guide or Owner." },
+            { id: "b4", type: "heading", level: 2, text: "Lifecycle Stages" },
+            { id: "b5", type: "bullet", text: "Proposed: Objective, business case, and target deliverables logged." },
+            { id: "b6", type: "bullet", text: "Under Review: Alignment checked, dependencies identified, specialist assigned." },
+            { id: "b7", type: "bullet", text: "Assessment & Plan: Methodology, technical/operational scope, and timeline proposed." },
+            { id: "b8", type: "bullet", text: "Confirmed Scope: Methodology approved and locked." },
+            { id: "b9", type: "bullet", text: "In Progress: Active execution." },
+            { id: "b10", type: "bullet", text: "Quality & Verification: Deliverables, demonstration links, and test criteria submitted." },
+            { id: "b11", type: "bullet", text: "Approved & Cleared: Final sign-off by authorized authority." },
           ],
         },
       },
@@ -177,15 +181,13 @@ export async function ensureSeedData() {
           blocks: [
             { id: "d1", type: "heading", level: 2, text: "Daily Operations & Sprint Sync" },
             { id: "d2", type: "check", checked: true, text: "Reviewed EQ-101 payout architecture proposal" },
-            { id: "d3", type: "check", checked: false, text: "Test investor 2FA verification flow on staging" },
-            { id: "d4", type: "paragraph", text: "All systems operational. Geofencing accuracy benchmark ongoing." },
+            { id: "d3", type: "check", checked: false, text: "Verify investor 2FA verification flow on staging" },
+            { id: "d4", type: "paragraph", text: "All systems operational. Geofencing benchmark ongoing." },
           ],
         },
       },
     });
-
-    console.log("[Seed] Default workspace, multi-role users, projects, and governed tasks initialized.");
   } catch (err) {
-    console.warn("[Seed] Warning while checking/seeding initial data:", err);
+    console.warn("[Seed] Warning while initializing enterprise data:", err);
   }
 }

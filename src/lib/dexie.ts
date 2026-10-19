@@ -18,6 +18,8 @@ export interface LocalProject {
   key: string;
   description?: string | null;
   workspaceId: string;
+  ownerName?: string | null;
+  guideName?: string | null;
   version: number;
   deletedAt?: Date | null;
   createdAt: Date;
@@ -37,10 +39,12 @@ export interface LocalTask {
   devConfirmedAt?: Date | null;
   qaTestNotes?: string | null;
   approvalSignoffNote?: string | null;
+  signoffByName?: string | null;
   creatorId: string;
   creatorName?: string;
   assigneeId?: string | null;
   assigneeName?: string | null;
+  approverId?: string | null;
   projectId: string;
   linkedPageId?: string | null;
   order: number;
@@ -108,7 +112,7 @@ export class ShNotesLocalDb extends Dexie {
   constructor() {
     super("shnotes_local_db");
 
-    this.version(1).stores({
+    this.version(2).stores({
       workspaces: "id, slug, updatedAt, deletedAt",
       projects: "id, workspaceId, key, updatedAt, deletedAt",
       tasks: "id, projectId, projectTaskId, stage, priority, order, isArchived, updatedAt, deletedAt",

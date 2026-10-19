@@ -29,40 +29,40 @@ export async function POST(req: Request) {
     let userPrompt = "";
 
     if (action === "draft-recommendation") {
-      systemPrompt = `You are a Principal Software Architect assisting a development team.
-Analyze the business and operational requirements provided by the Head of Operations (HOO) or Technical Assistant.
-Produce a concise, production-grade Technical Recommendation & Architecture Suggestion.
+      systemPrompt = `You are an Enterprise Solutions Architect and Governance Lead assisting a multidisciplinary team.
+Analyze the business and operational requirements provided by the Project Owner or Guide.
+Produce a concise, production-grade Execution Methodology & Architecture Plan.
 Structure your output into 3 clear markdown sections without emojis:
-### 1. Architectural Approach
-Explain the technical pattern, database schema impact, and endpoints.
+### 1. Methodology & Architecture Approach
+Explain the technical pattern, database schema impact, or operational execution workflow.
 ### 2. Trade-offs & Alternatives
-Contrast Option A (faster delivery) vs Option B (higher scale/durability).
+Contrast Option A (faster delivery) against Option B (higher scale and durability).
 ### 3. Estimated Effort & Risk Matrix
-Provide effort estimate in days and edge cases to safeguard.`;
+Provide timeline estimate in days and edge cases to safeguard.`;
 
       userPrompt = `Task Title: ${task?.title || context?.title || "Untitled Task"}
-Project: ${task?.project?.name || context?.projectName || "Enterprise Portal"}
+Project: ${task?.project?.name || context?.projectName || "Enterprise Workspace"}
 Operational Request / Description:
 ${task?.description || context?.description || "No description provided."}
-TA Review Notes:
+Review & Guidance Notes:
 ${task?.taReviewNotes || "None."}`;
     } else if (action === "qa-checklist") {
-      systemPrompt = `You are a Senior QA Automation & Verification Engineer.
-Review the developer's technical resolution notes, test credentials, and architecture notes.
-Produce a structured, actionable Acceptance Test Checklist for the Head of Operations (HOO) to execute before formal sign-off.
+      systemPrompt = `You are a Senior Quality & Acceptance Verification Specialist.
+Review the resolution notes, demonstration credentials, and execution details.
+Produce a structured, actionable Acceptance Verification Checklist for the Project Owner to inspect before formal sign-off.
 Use markdown checkboxes '- [ ]' without emojis.`;
 
       userPrompt = `Task: [${task?.projectTaskId || "TASK"}] ${task?.title}
-Developer Solution Notes:
+Execution & Solution Notes:
 ${task?.devRecommendation || "None"}
-QA Test Credentials & Staging Notes:
+Verification Notes & Credentials:
 ${task?.qaTestNotes || context?.qaTestNotes || "None"}
 Testing instructions:`;
     } else if (action === "summarize-thread") {
-      systemPrompt = `You are an Executive Engineering Coordinator.
-Summarize the task discussion thread into a clean, 3-bullet consensus summary stating:
+      systemPrompt = `You are an Executive Project Coordinator.
+Summarize the discussion thread into a clean, 3-bullet consensus summary stating:
 1. What was agreed upon
-2. Open risks or blockers
+2. Open risks or dependencies
 3. Final decision
 Do not use emojis.`;
 
@@ -76,7 +76,6 @@ Do not use emojis.`;
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
-    // Call Indunix AI Gateway if API key is provided
     if (apiKey) {
       const response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
@@ -101,16 +100,16 @@ Do not use emojis.`;
       }
     }
 
-    // Fallback Mock (Deterministic & High-Quality when API key is pending configuration)
+    // High quality deterministic fallback when API key is pending configuration
     let fallbackResult = "";
     if (action === "draft-recommendation") {
-      fallbackResult = `### 1. Architectural Approach
+      fallbackResult = `### 1. Methodology & Architecture Approach
 - Implement an idempotent database table with unique constraints on composite keys.
-- Expose a secure Next.js Server Action with session role verification (DEVELOPER or OWNER).
+- Expose a secure server handler with session role verification (OWNER or CONTRIBUTOR).
 - Utilize atomic transactions to ensure consistent state across parent and child entities.
 
 ### 2. Trade-offs & Alternatives
-- Option A (Sync RPC): Simpler implementation, but risks blocking client threads under high network latency.
+- Option A (Direct Synchronous Execution): Simpler delivery, but risks client blocking under high network latency.
 - Option B (Asynchronous Outbox Pattern - Recommended): Write mutations locally to IndexedDB/Postgres outbox, processing sequentially. Guarantees zero data loss during network interruptions.
 
 ### 3. Estimated Effort & Risk Matrix
@@ -125,7 +124,7 @@ Do not use emojis.`;
     } else if (action === "summarize-thread") {
       fallbackResult = `1. Consensus: Scope confirmed according to the proposed architecture specification.
 2. Technical Resolution: Implementation completed on staging with test credentials verified.
-3. Next Action: Awaiting Head of Operations (HOO) acceptance testing and sign-off verification.`;
+3. Next Action: Awaiting Project Owner acceptance testing and sign-off verification.`;
     }
 
     return NextResponse.json({ ok: true, result: fallbackResult });

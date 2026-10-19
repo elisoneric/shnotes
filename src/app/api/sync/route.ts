@@ -12,7 +12,6 @@ export async function POST(req: Request) {
 
     let currentUser = await getSessionUser();
     if (!currentUser) {
-      // For local-first seamless usage, fallback to first active user if unauthenticated
       currentUser = await prisma.user.findFirst({
         include: { memberships: { include: { workspace: true } } },
       });
@@ -47,18 +46,20 @@ export async function POST(req: Request) {
                   devConfirmedAt: payload.devConfirmedAt !== undefined ? (payload.devConfirmedAt ? new Date(payload.devConfirmedAt) : null) : currentTask.devConfirmedAt,
                   qaTestNotes: payload.qaTestNotes !== undefined ? payload.qaTestNotes : currentTask.qaTestNotes,
                   approvalSignoffNote: payload.approvalSignoffNote !== undefined ? payload.approvalSignoffNote : currentTask.approvalSignoffNote,
+                  signoffByName: payload.signoffByName !== undefined ? payload.signoffByName : currentTask.signoffByName,
                   version: { increment: 1 },
                 },
               });
 
               // Add stage audit log comment
               if (previousStage !== newStage) {
+                const stageName = newStage.replace(/_/g, " ").toLowerCase();
                 await prisma.taskComment.create({
                   data: {
                     taskId: entityId,
                     userId: currentUser.id,
                     type: CommentType.STAGE_CHANGE_AUDIT,
-                    content: `Ball-in-Court transition: Moved from ${previousStage.replace(/_/g, " ")} to ${newStage.replace(/_/g, " ")}.`,
+                    content: `Status transition: Moved to ${stageName} by ${currentUser.name}.`,
                   },
                 });
               }
@@ -74,17 +75,16 @@ export async function POST(req: Request) {
                   priority: payload.priority ?? existing.priority,
                   dueDate: payload.dueDate ? new Date(payload.dueDate) : null,
                   assigneeId: payload.assigneeId !== undefined ? payload.assigneeId : existing.assigneeId,
+                  approverId: payload.approverId !== undefined ? payload.approverId : existing.approverId,
                   order: payload.order !== undefined ? payload.order : existing.order,
                   version: { increment: 1 },
                 },
               });
             } else {
-              // Ensure project exists
               const project = await prisma.project.findFirst({
                 where: { id: payload.projectId },
               });
               if (project) {
-                // Determine next human task ID e.g. EQ-105
                 const count = await prisma.task.count({ where: { projectId: project.id } });
                 const humanId = `${project.key}-${count + 101}`;
 
@@ -99,6 +99,7 @@ export async function POST(req: Request) {
                     priority: payload.priority || "MEDIUM",
                     creatorId: currentUser.id,
                     assigneeId: payload.assigneeId || null,
+                    approverId: payload.approverId || null,
                     order: payload.order || 0.0,
                   },
                 });

@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'HOO', 'TECH_ASSISTANT', 'DEVELOPER', 'COLLABORATOR', 'VIEWER');
+CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'REVIEWER_GUIDE', 'CONTRIBUTOR', 'VIEWER', 'HOO', 'TECH_ASSISTANT', 'DEVELOPER', 'COLLABORATOR');
 
 -- CreateEnum
 CREATE TYPE "TaskStage" AS ENUM ('PROPOSED', 'TA_REVIEW', 'DEV_ASSESSMENT', 'CONFIRMED_READY', 'IN_PROGRESS', 'READY_FOR_TESTING', 'APPROVED_CLEARED', 'ARCHIVED');
@@ -31,7 +31,7 @@ CREATE TABLE "users" (
     "name" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "avatarUrl" TEXT,
-    "role" "WorkspaceRole" NOT NULL DEFAULT 'DEVELOPER',
+    "role" "WorkspaceRole" NOT NULL DEFAULT 'OWNER',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -55,7 +55,7 @@ CREATE TABLE "workspace_members" (
     "id" TEXT NOT NULL,
     "workspaceId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "role" "WorkspaceRole" NOT NULL DEFAULT 'COLLABORATOR',
+    "role" "WorkspaceRole" NOT NULL DEFAULT 'CONTRIBUTOR',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -69,6 +69,8 @@ CREATE TABLE "projects" (
     "key" TEXT NOT NULL,
     "description" TEXT,
     "workspaceId" TEXT NOT NULL,
+    "ownerName" TEXT,
+    "guideName" TEXT,
     "version" INTEGER NOT NULL DEFAULT 1,
     "deletedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -91,8 +93,10 @@ CREATE TABLE "tasks" (
     "devConfirmedAt" TIMESTAMP(3),
     "qaTestNotes" TEXT,
     "approvalSignoffNote" TEXT,
+    "signoffByName" TEXT,
     "creatorId" TEXT NOT NULL,
     "assigneeId" TEXT,
+    "approverId" TEXT,
     "projectId" TEXT NOT NULL,
     "linkedPageId" TEXT,
     "order" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
@@ -122,7 +126,7 @@ CREATE TABLE "task_comments" (
 -- CreateTable
 CREATE TABLE "pages" (
     "id" TEXT NOT NULL,
-    "title" TEXT NOT NULL DEFAULT 'Untitled',
+    "title" TEXT NOT NULL DEFAULT 'Untitled Document',
     "icon" TEXT,
     "content" JSONB,
     "isDiary" BOOLEAN NOT NULL DEFAULT false,
