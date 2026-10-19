@@ -15,9 +15,9 @@ export async function GET() {
       return NextResponse.json({ authenticated: false, user: null });
     }
 
-    // Get user's active workspace
-    const member = await prisma.workspaceMember.findFirst({
-      where: { userId: user.id },
+    // Get user's active workspace - prioritize owned workspace
+    let member = await prisma.workspaceMember.findFirst({
+      where: { userId: user.id, role: "OWNER" },
       include: {
         workspace: {
           include: {
@@ -27,7 +27,49 @@ export async function GET() {
       },
     });
 
-    const workspace = member?.workspace || null;
+    if (!member) {
+      member = await prisma.workspaceMember.findFirst({
+        where: { userId: user.id },
+        include: {
+          workspace: {
+            include: {
+              projects: { where: { deletedAt: null } },
+            },
+          },
+        },
+      });
+    }
+
+    let workspace = member?.workspace || null;
+    let activeRole = member?.role || user.role;
+
+    if (!workspace) {
+      const personalWs = await prisma.workspace.create({
+        data: {
+          name: `${user.name.split(" ")[0]}'s Workspace`,
+          slug: `ws-${user.id.slice(-6)}-${Math.random().toString(36).substring(2, 6)}`,
+          members: {
+            create: {
+              userId: user.id,
+              role: "OWNER",
+            },
+          },
+          projects: {
+            create: {
+              name: "General Tasks",
+              key: "GEN",
+              description: "Personal tasks and to-do items",
+              ownerName: user.name,
+            },
+          },
+        },
+        include: {
+          projects: true,
+        },
+      });
+      workspace = personalWs;
+      activeRole = "OWNER";
+    }
 
     return NextResponse.json({
       authenticated: true,
@@ -35,7 +77,7 @@ export async function GET() {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: member?.role || user.role,
+        role: activeRole,
       },
       workspace: workspace
         ? {

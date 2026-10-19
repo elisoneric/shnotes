@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { hashPassword, createSession, getSessionUser, COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth";
+import { WorkspaceRole, TaskStage, TaskPriority } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -95,10 +96,49 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
           name: name.trim(),
           email: cleanEmail,
           passwordHash,
-          role: invite.role,
+          role: invite.pageId ? WorkspaceRole.OWNER : invite.role,
         },
       });
       targetUserId = newUser.id;
+
+      // When invited to a specific note, the user starts fresh in their own workspace
+      if (invite.pageId) {
+        const userWs = await prisma.workspace.create({
+          data: {
+            name: `${newUser.name.split(" ")[0]}'s Workspace`,
+            slug: `ws-${newUser.id.slice(-6)}-${Math.random().toString(36).substring(2, 6)}`,
+            members: {
+              create: {
+                userId: newUser.id,
+                role: WorkspaceRole.OWNER,
+              },
+            },
+          },
+        });
+
+        const userProj = await prisma.project.create({
+          data: {
+            name: "General Tasks",
+            key: "GEN",
+            description: "Personal tasks and to-do items",
+            workspaceId: userWs.id,
+            ownerName: newUser.name,
+          },
+        });
+
+        await prisma.task.create({
+          data: {
+            projectId: userProj.id,
+            projectTaskId: `${userProj.key}-101`,
+            title: "Welcome to your task board",
+            description: "Track tasks, set priorities, and collaborate with your team.",
+            stage: TaskStage.PROPOSED,
+            priority: TaskPriority.MEDIUM,
+            creatorId: newUser.id,
+            order: 1.0,
+          },
+        });
+      }
 
       // Create session cookie
       const rawToken = await createSession(newUser.id, req.headers.get("user-agent") || undefined);
@@ -114,23 +154,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       targetUserId = user.id;
     }
 
-    // Add user as member to workspace (or update role)
-    await prisma.workspaceMember.upsert({
-      where: {
-        workspaceId_userId: {
+    if (invite.pageId) {
+      // Note-Level Invite: Grant collaboration permission ONLY to this specific page
+      await prisma.pageCollaborator.upsert({
+        where: {
+          pageId_userId: {
+            pageId: invite.pageId,
+            userId: targetUserId,
+          },
+        },
+        create: {
+          pageId: invite.pageId,
+          userId: targetUserId,
+          role: invite.role,
+        },
+        update: {
+          role: invite.role,
+        },
+      });
+    } else {
+      // Workspace-Level Invite: Add user as member to workspace
+      await prisma.workspaceMember.upsert({
+        where: {
+          workspaceId_userId: {
+            workspaceId: invite.workspaceId,
+            userId: targetUserId,
+          },
+        },
+        create: {
           workspaceId: invite.workspaceId,
           userId: targetUserId,
+          role: invite.role,
         },
-      },
-      create: {
-        workspaceId: invite.workspaceId,
-        userId: targetUserId,
-        role: invite.role,
-      },
-      update: {
-        role: invite.role,
-      },
-    });
+        update: {
+          role: invite.role,
+        },
+      });
+    }
 
     // Mark invite accepted
     await prisma.workspaceInvite.update({

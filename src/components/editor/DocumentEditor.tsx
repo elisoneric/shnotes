@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { localDb, LocalPage } from "@/lib/dexie";
 import { syncManager } from "@/lib/sync";
 import {
@@ -90,17 +90,68 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     }
   }, [inviteModalOpen, loadCollaborators]);
 
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedVersionRef = useRef<number>(0);
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+
+  // Poll for remote updates so changes typed on another device sync in real-time
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      if (!pageId) return;
+      const remote = await localDb.pages.get(pageId);
+      if (!remote) return;
+
+      if (remote.version > lastSavedVersionRef.current) {
+        lastSavedVersionRef.current = remote.version;
+        setPage(remote);
+
+        // Sync title if user is not currently typing in title input
+        if (remote.title && remote.title !== title && document.activeElement?.id !== "doc-title-input") {
+          setTitle(remote.title);
+        }
+
+        // Merge remote blocks smoothly
+        const remoteBlocks = remote.content?.blocks;
+        if (Array.isArray(remoteBlocks) && remoteBlocks.length > 0) {
+          setBlocks((currentBlocks) => {
+            if (JSON.stringify(currentBlocks) === JSON.stringify(remoteBlocks)) {
+              return currentBlocks;
+            }
+
+            // If user is actively typing in a block, don't overwrite that specific block
+            if (focusedBlockId) {
+              const activeCurrent = currentBlocks.find((b) => b.id === focusedBlockId);
+              return remoteBlocks.map((rb) => {
+                if (rb.id === focusedBlockId && activeCurrent) {
+                  return activeCurrent;
+                }
+                return rb;
+              });
+            }
+
+            return remoteBlocks;
+          });
+        }
+      }
+    }, 1500);
+
+    return () => clearInterval(pollInterval);
+  }, [pageId, focusedBlockId, title]);
+
   // Debounced autosave to local Dexie and sync queue
   const saveContent = useCallback(
     async (updatedTitle: string, updatedBlocks: BlockItem[], currentToken: string | null) => {
       if (!page) return;
+
+      const nextVersion = (page.version || 1) + 1;
+      lastSavedVersionRef.current = nextVersion;
 
       const updatedPage: LocalPage = {
         ...page,
         title: updatedTitle,
         secretToken: currentToken,
         content: { blocks: updatedBlocks },
-        version: page.version + 1,
+        version: nextVersion,
         updatedAt: new Date(),
       };
 
@@ -115,15 +166,22 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     [page]
   );
 
+  const scheduleSave = (updatedTitle: string, updatedBlocks: BlockItem[]) => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveContent(updatedTitle, updatedBlocks, secretToken);
+    }, 350);
+  };
+
   const handleTitleChange = (val: string) => {
     setTitle(val);
-    saveContent(val, blocks, secretToken);
+    scheduleSave(val, blocks);
   };
 
   const handleBlockTextChange = (id: string, text: string) => {
     const updated = blocks.map((b) => (b.id === id ? { ...b, text } : b));
     setBlocks(updated);
-    saveContent(title, updated, secretToken);
+    scheduleSave(title, updated);
   };
 
   const handleToggleCheck = (id: string) => {
@@ -364,9 +422,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
       </div>
 
       {/* Main Canvas Document Area */}
-      <div className="max-w-3xl w-full mx-auto px-8 py-10 space-y-4">
+      <div className="max-w-3xl w-full mx-auto px-12 sm:px-16 py-10 space-y-4">
         {/* Document Title Input */}
         <input
+          id="doc-title-input"
           type="text"
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
@@ -377,10 +436,11 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
         {/* Blocks Rendering with Enter and Keyboard Navigation */}
         <div className="space-y-2">
           {blocks.map((block, idx) => (
-            <div key={block.id} className="group relative flex items-start gap-2 -ml-8 pl-8">
-              {/* Block Handle / Add Button */}
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute left-0 top-1.5 flex items-center gap-1">
+            <div key={block.id} className="group relative flex items-start">
+              {/* Block Handle / Add Button strictly placed before typing start */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -left-12 top-1.5 flex items-center gap-0.5 z-10 select-none">
                 <button
+                  type="button"
                   onClick={() => setSlashMenuIndex(slashMenuIndex === idx ? null : idx)}
                   title="Add block below"
                   className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -388,6 +448,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                   <Plus className="w-3.5 h-3.5" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => removeBlock(block.id)}
                   title="Delete block"
                   className="p-1 rounded text-zinc-400 hover:text-rose-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -397,12 +458,14 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
               </div>
 
               {/* Block Content by Type */}
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 {block.type === "heading" && block.level === 1 && (
                   <input
                     id={`block-input-${block.id}`}
                     type="text"
                     value={block.text || ""}
+                    onFocus={() => setFocusedBlockId(block.id)}
+                    onBlur={() => setFocusedBlockId(null)}
                     onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
                     placeholder="Heading 1"
@@ -415,6 +478,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     id={`block-input-${block.id}`}
                     type="text"
                     value={block.text || ""}
+                    onFocus={() => setFocusedBlockId(block.id)}
+                    onBlur={() => setFocusedBlockId(null)}
                     onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
                     placeholder="Heading 2"
@@ -426,6 +491,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                   <textarea
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
+                    onFocus={() => setFocusedBlockId(block.id)}
+                    onBlur={() => setFocusedBlockId(null)}
                     onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
                     placeholder="Type '/' for commands"
@@ -441,6 +508,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       type="text"
                       value={block.text || ""}
+                      onFocus={() => setFocusedBlockId(block.id)}
+                      onBlur={() => setFocusedBlockId(null)}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="List item"
@@ -461,6 +530,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       type="text"
                       value={block.text || ""}
+                      onFocus={() => setFocusedBlockId(block.id)}
+                      onBlur={() => setFocusedBlockId(null)}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="To-do item"
@@ -477,6 +548,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     <textarea
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
+                      onFocus={() => setFocusedBlockId(block.id)}
+                      onBlur={() => setFocusedBlockId(null)}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="Callout text"
@@ -492,6 +565,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       type="text"
                       value={block.text || ""}
+                      onFocus={() => setFocusedBlockId(block.id)}
+                      onBlur={() => setFocusedBlockId(null)}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="Quote text"
@@ -505,6 +580,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     <textarea
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
+                      onFocus={() => setFocusedBlockId(block.id)}
+                      onBlur={() => setFocusedBlockId(null)}
                       onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="Code snippet"

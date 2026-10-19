@@ -70,16 +70,14 @@ export function Shell({ initialUser }: ShellProps = {}) {
       const p = activeWsId ? allProjects.filter((x) => x.workspaceId === activeWsId) : allProjects;
 
       const allPages = await localDb.pages.filter((x) => !x.isDiary && !x.deletedAt).toArray();
-      const docPages = activeWsId ? allPages.filter((x) => x.workspaceId === activeWsId) : allPages;
-
       setProjects(p);
-      setPages(docPages);
+      setPages(allPages);
 
       if (p.length > 0 && (!selectedProject || (activeWsId && selectedProject.workspaceId !== activeWsId))) {
         setSelectedProject(p[0]);
       }
-      if (docPages.length > 0 && !selectedPageId) {
-        setSelectedPageId(docPages[0].id);
+      if (allPages.length > 0 && !selectedPageId) {
+        setSelectedPageId(allPages[0].id);
       }
     } catch (err) {
       console.warn("Failed to read local Dexie data:", err);
@@ -122,11 +120,10 @@ export function Shell({ initialUser }: ShellProps = {}) {
             setWorkspaceName(data.workspace.name);
             setWorkspaceId(data.workspace.id);
 
-            // Clean up stale Dexie data belonging to other foreign workspaces
+            // Clean up stale Dexie projects belonging to other foreign workspaces
             try {
               const wsId = data.workspace.id;
               await localDb.projects.filter((p) => Boolean(p.workspaceId && p.workspaceId !== wsId)).delete();
-              await localDb.pages.filter((p) => Boolean(p.workspaceId && p.workspaceId !== wsId)).delete();
               refreshLocalData(wsId);
             } catch (err) {
               console.warn("Cleanup error:", err);
@@ -285,7 +282,7 @@ export function Shell({ initialUser }: ShellProps = {}) {
           {/* Documentation Canvas Section */}
           <div className="space-y-1">
             <div className="px-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-              <span>Canvas Notes</span>
+              <span>My Notes</span>
               <button
                 onClick={handleCreatePage}
                 title="Create new note"
@@ -294,27 +291,65 @@ export function Shell({ initialUser }: ShellProps = {}) {
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
-            {pages.map((p) => {
-              const isSelected = currentView === "PAGE" && selectedPageId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setSelectedPageId(p.id);
-                    setCurrentView("PAGE");
-                  }}
-                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 truncate transition-colors ${
-                    isSelected
-                      ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold"
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span className="truncate">{p.title || "Untitled Document"}</span>
-                </button>
-              );
-            })}
+            {pages
+              .filter((p) => !workspaceId || p.workspaceId === workspaceId)
+              .map((p) => {
+                const isSelected = currentView === "PAGE" && selectedPageId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setSelectedPageId(p.id);
+                      setCurrentView("PAGE");
+                    }}
+                    className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 truncate transition-colors ${
+                      isSelected
+                        ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold"
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="truncate">{p.title || "Untitled Document"}</span>
+                  </button>
+                );
+              })}
           </div>
+
+          {/* Shared with Me Notes Section */}
+          {workspaceId && pages.some((p) => p.workspaceId !== workspaceId) && (
+            <div className="space-y-1">
+              <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                Shared With Me
+              </div>
+              {pages
+                .filter((p) => p.workspaceId !== workspaceId)
+                .map((p) => {
+                  const isSelected = currentView === "PAGE" && selectedPageId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setSelectedPageId(p.id);
+                        setCurrentView("PAGE");
+                      }}
+                      className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between truncate transition-colors ${
+                        isSelected
+                          ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span className="truncate">{p.title || "Shared Note"}</span>
+                      </div>
+                      <span className="text-[9px] px-1 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-500">
+                        Shared
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
         </div>
 
         {/* Sync Status Badge (Bottom of Sidebar) */}

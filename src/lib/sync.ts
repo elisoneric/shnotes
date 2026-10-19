@@ -9,6 +9,7 @@ class SyncManager {
   private listeners: Set<SyncListener> = new Set();
   private syncTimer: NodeJS.Timeout | null = null;
   private isSyncing = false;
+  private syncQueued = false;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -49,7 +50,7 @@ class SyncManager {
     }
   }
 
-  public startBackgroundSync(intervalMs = 20000) {
+  public startBackgroundSync(intervalMs = 2500) {
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = setInterval(() => {
       if (typeof navigator !== "undefined" && navigator.onLine && !this.isSyncing) {
@@ -83,7 +84,10 @@ class SyncManager {
   }
 
   public async syncNow(): Promise<boolean> {
-    if (this.isSyncing) return false;
+    if (this.isSyncing) {
+      this.syncQueued = true;
+      return false;
+    }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       this.status = "OFFLINE";
       this.notify();
@@ -148,15 +152,18 @@ class SyncManager {
       }
 
       this.status = "IDLE";
-      this.isSyncing = false;
-      this.notify();
       return true;
     } catch (err) {
       console.warn("[Sync] Background sync encountered an issue:", err);
       this.status = typeof navigator !== "undefined" && !navigator.onLine ? "OFFLINE" : "ERROR";
+      return false;
+    } finally {
       this.isSyncing = false;
       this.notify();
-      return false;
+      if (this.syncQueued) {
+        this.syncQueued = false;
+        setTimeout(() => this.syncNow(), 150);
+      }
     }
   }
 }

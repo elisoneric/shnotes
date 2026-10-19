@@ -21,7 +21,13 @@ export async function POST(req: Request) {
     });
     const workspaceIds = userMemberships.map((m) => m.workspaceId);
 
-    if (workspaceIds.length === 0) {
+    const pageCollaborations = await prisma.pageCollaborator.findMany({
+      where: { userId: currentUser.id },
+      select: { pageId: true },
+    });
+    const sharedPageIds = pageCollaborations.map((c) => c.pageId);
+
+    if (workspaceIds.length === 0 && sharedPageIds.length === 0) {
       return NextResponse.json({ error: "User has no active workspace membership." }, { status: 403 });
     }
 
@@ -117,7 +123,15 @@ export async function POST(req: Request) {
           }
         } else if (entity === "page") {
           if (action === "UPSERT") {
-            const existing = await prisma.page.findUnique({ where: { id: entityId } });
+            const existing = await prisma.page.findFirst({
+              where: {
+                id: entityId,
+                OR: [
+                  { workspaceId: { in: workspaceIds } },
+                  { id: { in: sharedPageIds } },
+                ],
+              },
+            });
             if (existing) {
               await prisma.page.update({
                 where: { id: entityId },
@@ -198,7 +212,13 @@ export async function POST(req: Request) {
         },
       }),
       prisma.page.findMany({
-        where: { workspaceId: { in: workspaceIds }, updatedAt: { gte: sinceDate } },
+        where: {
+          OR: [
+            { workspaceId: { in: workspaceIds } },
+            { id: { in: sharedPageIds } },
+          ],
+          updatedAt: { gte: sinceDate },
+        },
       }),
     ]);
 

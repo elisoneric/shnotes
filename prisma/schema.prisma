@@ -75,6 +75,7 @@ model User {
   createdTasks  Task[]            @relation("TaskCreator")
   comments      TaskComment[]
   sessions      AuthSession[]
+  pageCollaborations PageCollaborator[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -205,6 +206,7 @@ model Page {
   children        Page[]            @relation("PageTree")
   tasks           Task[]
   invites         WorkspaceInvite[]
+  collaborators   PageCollaborator[]
   version         Int               @default(1)
   deletedAt       DateTime?
   createdAt       DateTime          @default(now())
@@ -233,3 +235,18 @@ model WorkspaceInvite {
   @@index([workspaceId])
   @@map("workspace_invites")
 }
+
+model PageCollaborator {
+  id        String        @id @default(cuid())
+  pageId    String
+  page      Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      WorkspaceRole @default(CONTRIBUTOR)
+  createdAt DateTime      @default(now())
+
+  @@unique([pageId, userId])
+  @@index([userId])
+  @@map("page_collaborators")
+}
+
