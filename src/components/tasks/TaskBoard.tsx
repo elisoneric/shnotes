@@ -12,13 +12,9 @@ import {
   Filter,
   CheckCircle2,
   Clock,
-  Layers,
-  FileCheck2,
-  ShieldCheck,
-  ArrowRight,
+  Circle,
   FolderGit2,
-  UserCheck,
-  Compass,
+  X,
 } from "lucide-react";
 
 interface TaskBoardProps {
@@ -28,23 +24,45 @@ interface TaskBoardProps {
   currentUserName: string;
 }
 
-const COLUMNS: { stage: TaskStage; title: string; subtitle: string; roleTag: string }[] = [
-  { stage: "PROPOSED", title: "Proposed", subtitle: "Awaiting Triage", roleTag: "Initiator" },
-  { stage: "TA_REVIEW", title: "Under Review", subtitle: "Review & Alignment", roleTag: "Guide / Reviewer" },
-  { stage: "DEV_ASSESSMENT", title: "Plan & Scope", subtitle: "Methodology & Effort", roleTag: "Specialist" },
-  { stage: "CONFIRMED_READY", title: "Confirmed", subtitle: "Scope Approved", roleTag: "Approver" },
-  { stage: "IN_PROGRESS", title: "In Progress", subtitle: "Active Execution", roleTag: "Assignee" },
-  { stage: "READY_FOR_TESTING", title: "Verification", subtitle: "Deliverables & Review", roleTag: "Reviewer" },
-  { stage: "APPROVED_CLEARED", title: "Completed", subtitle: "Final Sign-off", roleTag: "Approver" },
+const COLUMNS: {
+  id: string;
+  title: string;
+  stages: TaskStage[];
+  defaultStage: TaskStage;
+}[] = [
+  {
+    id: "TODO",
+    title: "To Do",
+    stages: ["PROPOSED", "TA_REVIEW", "DEV_ASSESSMENT", "CONFIRMED_READY"],
+    defaultStage: "PROPOSED",
+  },
+  {
+    id: "IN_PROGRESS",
+    title: "In Progress",
+    stages: ["IN_PROGRESS", "READY_FOR_TESTING"],
+    defaultStage: "IN_PROGRESS",
+  },
+  {
+    id: "DONE",
+    title: "Done",
+    stages: ["APPROVED_CLEARED", "ARCHIVED"],
+    defaultStage: "APPROVED_CLEARED",
+  },
 ];
 
-export function TaskBoard({ currentProject, currentRole, currentUserId, currentUserName }: TaskBoardProps) {
+export function TaskBoard({
+  currentProject,
+  currentRole,
+  currentUserId,
+  currentUserName,
+}: TaskBoardProps) {
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [comments, setComments] = useState<LocalTaskComment[]>([]);
   const [selectedTask, setSelectedTask] = useState<LocalTask | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createStage, setCreateStage] = useState<TaskStage>("PROPOSED");
 
   // New task form state
   const [newTitle, setNewTitle] = useState("");
@@ -85,7 +103,7 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
       projectTaskId: humanId,
       title: newTitle.trim(),
       description: newDesc.trim() || null,
-      stage: "PROPOSED",
+      stage: createStage,
       priority: newPriority,
       creatorId: currentUserId,
       creatorName: currentUserName,
@@ -103,7 +121,7 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
       projectId: currentProject.id,
       title: newTitle.trim(),
       description: newDesc.trim() || null,
-      stage: "PROPOSED",
+      stage: createStage,
       priority: newPriority,
       order: count + 1.0,
     });
@@ -111,15 +129,22 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
     setNewTitle("");
     setNewDesc("");
     setNewPriority("MEDIUM");
+    setCreateStage("PROPOSED");
     setIsCreateModalOpen(false);
     loadData();
+  };
+
+  const openCreateForColumn = (stage: TaskStage) => {
+    setCreateStage(stage);
+    setIsCreateModalOpen(true);
   };
 
   const filteredTasks = tasks.filter((t) => {
     const matchesSearch =
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.projectTaskId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesPriority = selectedPriority === "ALL" || t.priority === selectedPriority;
+    const matchesPriority =
+      selectedPriority === "ALL" || t.priority === selectedPriority;
     return matchesSearch && matchesPriority;
   });
 
@@ -127,11 +152,11 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/20 font-sans">
       {/* Top Filter & Action Bar */}
       <div className="px-6 py-3.5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <FolderGit2 className="w-5 h-5 text-zinc-500" />
             <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
-              {currentProject?.name || "All Projects"}
+              {currentProject?.name || "Tasks"}
             </h2>
             {currentProject && (
               <span className="font-mono text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold">
@@ -140,22 +165,10 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
             )}
           </div>
 
-          {currentProject?.ownerName && (
-            <div className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500 font-medium border-l border-zinc-200 dark:border-zinc-800 pl-3">
-              <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
-              <span>Owner: <strong className="text-zinc-700 dark:text-zinc-300 font-semibold">{currentProject.ownerName}</strong></span>
-            </div>
-          )}
-
-          {currentProject?.guideName && (
-            <div className="hidden lg:flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-              <Compass className="w-3.5 h-3.5 text-zinc-400" />
-              <span>Guide: <strong className="text-zinc-700 dark:text-zinc-300 font-semibold">{currentProject.guideName}</strong></span>
-            </div>
-          )}
-
-          <span className="text-xs text-zinc-400">•</span>
-          <span className="text-xs text-zinc-500 font-medium">{filteredTasks.length} governed tasks</span>
+          <span className="text-xs text-zinc-300 dark:text-zinc-700">•</span>
+          <span className="text-xs text-zinc-500 font-medium">
+            {filteredTasks.length} {filteredTasks.length === 1 ? "task" : "tasks"}
+          </span>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -166,8 +179,8 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by key or title"
-              className="text-xs pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 w-48 sm:w-60"
+              placeholder="Search tasks..."
+              className="text-xs pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 w-44 sm:w-56"
             />
           </div>
 
@@ -178,55 +191,71 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
             className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 focus:outline-none"
           >
             <option value="ALL">All Priorities</option>
-            <option value="URGENT">Urgent</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
             <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+            <option value="URGENT">Urgent</option>
           </select>
 
-          {/* Raise Task Button */}
+          {/* New Task Button */}
           <button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() => openCreateForColumn("PROPOSED")}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Raise Task</span>
+            <span>New Task</span>
           </button>
         </div>
       </div>
 
-      {/* Kanban Stage Columns Container */}
-      <div className="flex-1 overflow-x-auto p-6 flex gap-4">
+      {/* 3-Column Simple Task Board */}
+      <div className="flex-1 overflow-x-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
         {COLUMNS.map((col) => {
-          const colTasks = filteredTasks.filter((t) => t.stage === col.stage);
+          const colTasks = filteredTasks.filter((t) =>
+            col.stages.includes(t.stage)
+          );
+
           return (
             <div
-              key={col.stage}
-              className="w-72 shrink-0 flex flex-col rounded-xl bg-zinc-100/70 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 p-3 max-h-full"
+              key={col.id}
+              className="flex flex-col rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 p-3.5 max-h-full"
             >
               {/* Column Header */}
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-200 dark:border-zinc-800">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
-                      {col.title}
-                    </span>
-                    <span className="text-[11px] font-semibold px-1.5 py-0.2 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-                      {colTasks.length}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400 font-medium">{col.subtitle}</div>
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center gap-2">
+                  {col.id === "TODO" && (
+                    <Circle className="w-3.5 h-3.5 text-zinc-400" />
+                  )}
+                  {col.id === "IN_PROGRESS" && (
+                    <Clock className="w-3.5 h-3.5 text-blue-500" />
+                  )}
+                  {col.id === "DONE" && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  )}
+
+                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+                    {col.title}
+                  </span>
+                  <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-zinc-200/80 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                    {colTasks.length}
+                  </span>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 text-zinc-500 font-medium">
-                  {col.roleTag}
-                </span>
+
+                <button
+                  type="button"
+                  onClick={() => openCreateForColumn(col.defaultStage)}
+                  title={`Add task to ${col.title}`}
+                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
               </div>
 
-              {/* Cards Stream */}
+              {/* Tasks Cards Stream */}
               <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
                 {colTasks.length === 0 ? (
-                  <div className="py-8 text-center border border-dashed border-zinc-200 dark:border-zinc-800/60 rounded-lg text-xs text-zinc-400">
-                    No items in {col.title}
+                  <div className="py-12 text-center border border-dashed border-zinc-200 dark:border-zinc-800/60 rounded-xl text-xs text-zinc-400">
+                    No tasks in {col.title}
                   </div>
                 ) : (
                   colTasks.map((t) => {
@@ -242,12 +271,22 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
                   })
                 )}
               </div>
+
+              {/* Quick Add Button at bottom of column */}
+              <button
+                type="button"
+                onClick={() => openCreateForColumn(col.defaultStage)}
+                className="mt-3 w-full py-2 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add task</span>
+              </button>
             </div>
           );
         })}
       </div>
 
-      {/* Governed Task Detail & Action Modal */}
+      {/* Task Detail Modal */}
       {selectedTask && (
         <TaskGovernanceModal
           task={selectedTask}
@@ -268,16 +307,16 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
         />
       )}
 
-      {/* Raise New Task Modal */}
+      {/* Create New Task Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm animate-in fade-in duration-150">
           <form
             onSubmit={handleCreateTask}
-            className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-6 space-y-4"
+            className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-6 space-y-4"
           >
             <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                <span>Raise New Initiative or Task</span>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                <span>Create New Task</span>
                 {currentProject && (
                   <span className="font-mono text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold">
                     {currentProject.key}
@@ -287,64 +326,97 @@ export function TaskBoard({ currentProject, currentRole, currentUserId, currentU
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Task Title *</label>
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                Task Title *
+              </label>
               <input
                 type="text"
                 required
+                autoFocus
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Task title"
-                className="w-full text-xs p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                placeholder="What needs to be done?"
+                className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Objective & Business Requirements
+                Notes & Description
               </label>
               <textarea
                 value={newDesc}
                 onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="Business objective and operational requirements"
+                placeholder="Add notes, details, or steps"
                 rows={3}
-                className="w-full text-xs p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Priority</label>
-              <select
-                value={newPriority}
-                onChange={(e) => setNewPriority(e.target.value as TaskPriority)}
-                className="w-full text-xs p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none"
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="URGENT">Urgent</option>
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  Status
+                </label>
+                <select
+                  value={
+                    createStage === "APPROVED_CLEARED"
+                      ? "DONE"
+                      : createStage === "IN_PROGRESS"
+                      ? "IN_PROGRESS"
+                      : "TODO"
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "DONE") setCreateStage("APPROVED_CLEARED");
+                    else if (val === "IN_PROGRESS") setCreateStage("IN_PROGRESS");
+                    else setCreateStage("PROPOSED");
+                  }}
+                  className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none"
+                >
+                  <option value="TODO">To Do</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="DONE">Done</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  Priority
+                </label>
+                <select
+                  value={newPriority}
+                  onChange={(e) => setNewPriority(e.target.value as TaskPriority)}
+                  className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-xs px-4 py-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="text-xs px-4 py-2 rounded-xl text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 shadow-sm"
+                className="text-xs font-semibold px-4 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 shadow-sm"
               >
-                Submit Initiative
+                Create Task
               </button>
             </div>
           </form>

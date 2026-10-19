@@ -35,7 +35,7 @@ export function LandingPage({ isAuthenticated = false }: LandingPageProps) {
             </div>
             <div>
               <span className="font-bold text-base tracking-tight text-zinc-950 dark:text-zinc-50">ShNotes</span>
-              <span className="text-xs text-zinc-400 font-medium ml-2 hidden sm:inline">Governance Platform</span>
+              <span className="text-xs text-zinc-400 font-medium ml-2 hidden sm:inline">Workspace & Notes</span>
             </div>
           </div>
 
@@ -73,15 +73,15 @@ export function LandingPage({ isAuthenticated = false }: LandingPageProps) {
       <section className="px-6 pt-20 pb-16 max-w-5xl mx-auto text-center space-y-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-xs text-zinc-600 dark:text-zinc-400 font-medium">
           <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
-          <span>Self-Hosted Enterprise Engineering & Governance</span>
+          <span>Self-Hosted Workspace & Task Management</span>
         </div>
 
         <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-zinc-950 dark:text-zinc-50 max-w-4xl mx-auto leading-tight">
-          The Governed Workspace for High-Assurance Teams.
+          Clean Notes & Stress-Free Tasking.
         </h1>
 
         <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-          Unifying Notion-style document canvases with Linear-grade Ball-in-Court approval gates, zero-latency local-first offline synchronization, and native Indunix AI.
+          Unifying Notion-style document canvases with fast 3-stage task tracking, zero-latency local-first offline synchronization, and native Indunix AI.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
@@ -246,7 +246,7 @@ export function LandingPage({ isAuthenticated = false }: LandingPageProps) {
             </div>
             <span className="font-semibold text-zinc-700 dark:text-zinc-300">ShNotes</span>
             <span>•</span>
-            <span>Self-Hosted Engineering Governance Platform</span>
+            <span>Self-Hosted Workspace & Notes Platform</span>
           </div>
 
           <div className="flex items-center gap-4">

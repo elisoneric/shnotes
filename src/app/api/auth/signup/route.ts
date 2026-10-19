@@ -62,14 +62,14 @@ export async function POST(req: Request) {
         },
       });
 
-      const pName = projectName?.trim() || "Operations & Strategy";
+      const pName = projectName?.trim() || "General Tasks";
       const pKey = (projectKey?.trim() || workspaceName.slice(0, 3)).toUpperCase().replace(/[^A-Z]/g, "PR");
 
       const project = await tx.project.create({
         data: {
           name: pName,
-          key: pKey.slice(0, 4) || "PRI",
-          description: "Primary operational governance and execution workspace",
+          key: pKey.slice(0, 4) || "GEN",
+          description: "Primary workspace for tasks and to-do items",
           workspaceId: workspace.id,
           ownerName: user.name,
         },
@@ -80,10 +80,10 @@ export async function POST(req: Request) {
         data: {
           projectId: project.id,
           projectTaskId: `${project.key}-101`,
-          title: "Initialize Workspace Governance Framework",
-          description: "Review operational objectives, establish project guides, and configure first initiatives.",
+          title: "Welcome to your task board",
+          description: "Organize tasks, set priorities, and track your work.",
           stage: TaskStage.PROPOSED,
-          priority: TaskPriority.HIGH,
+          priority: TaskPriority.MEDIUM,
           creatorId: user.id,
           order: 1.0,
         },
@@ -93,11 +93,11 @@ export async function POST(req: Request) {
       await tx.page.create({
         data: {
           workspaceId: workspace.id,
-          title: "Workspace Handbook & Policies",
+          title: "Welcome to Notes",
           content: {
             blocks: [
-              { id: "b1", type: "heading", level: 1, text: `${workspace.name} Handbook` },
-              { id: "b2", type: "paragraph", text: "Welcome to your governed workspace canvas. All initiatives transition through verified review gates." },
+              { id: "b1", type: "heading", level: 1, text: `Welcome to ${workspace.name}` },
+              { id: "b2", type: "paragraph", text: "This is your clean canvas for writing notes, drafting documentation, and keeping track of thoughts." },
               { id: "b3", type: "callout", text: "Pro tip: Use the slash command '/' anywhere to insert checklists, code blocks, or headings." },
             ],
           },

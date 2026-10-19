@@ -11,8 +11,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
-  const [projectName, setProjectName] = useState("Core Operations");
-  const [projectKey, setProjectKey] = useState("COR");
+  const [projectName, setProjectName] = useState("General Tasks");
+  const [projectKey, setProjectKey] = useState("GEN");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -176,7 +176,7 @@ export default function SignupPage() {
                   maxLength={4}
                   value={projectKey}
                   onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
-                  placeholder="COR"
+                  placeholder="GEN"
                   className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-mono text-center uppercase focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>

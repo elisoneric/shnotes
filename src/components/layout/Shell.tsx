@@ -219,7 +219,7 @@ export function Shell({ initialUser }: ShellProps = {}) {
               <h1 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-none truncate">
                 {workspaceName}
               </h1>
-              <span className="text-[10px] text-zinc-400 font-medium truncate block mt-0.5">Enterprise Governance</span>
+              <span className="text-[10px] text-zinc-400 font-medium truncate block mt-0.5">Workspace</span>
             </div>
           </div>
           <button
@@ -232,9 +232,9 @@ export function Shell({ initialUser }: ShellProps = {}) {
 
         {/* Sidebar Nav Items */}
         <div className="flex-1 overflow-y-auto p-3 space-y-6">
-          {/* Projects & Governed Boards */}
+          {/* Projects */}
           <div className="space-y-1">
-            <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Governed Projects</div>
+            <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Projects</div>
             {projects.length === 0 ? (
               <div className="px-2 py-1 text-xs text-zinc-400">Loading projects...</div>
             ) : (
@@ -266,9 +266,9 @@ export function Shell({ initialUser }: ShellProps = {}) {
             )}
           </div>
 
-          {/* Operations Diary Section */}
+          {/* Daily Log Section */}
           <div className="space-y-1">
-            <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Daily Operations</div>
+            <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Daily Log</div>
             <button
               onClick={() => setCurrentView("DIARY")}
               className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
@@ -278,7 +278,7 @@ export function Shell({ initialUser }: ShellProps = {}) {
               }`}
             >
               <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-              <span>Operations Diary Log</span>
+              <span>Daily Diary</span>
             </button>
           </div>
 
@@ -386,25 +386,24 @@ export function Shell({ initialUser }: ShellProps = {}) {
             )}
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-zinc-500">Perspective:</span>
-              {/* Role Switcher Pill */}
-              <select
-                value={currentRole}
-                onChange={(e) => {
-                  const role = e.target.value as WorkspaceRole;
-                  setCurrentRole(role);
-                  if (role === "OWNER" || role === "HOO") setUserName("Project Owner (Final Authority)");
-                  if (role === "REVIEWER_GUIDE" || role === "TECH_ASSISTANT") setUserName("Project Guide / Lead Reviewer");
-                  if (role === "CONTRIBUTOR" || role === "DEVELOPER") setUserName("Specialist / Developer");
-                  if (role === "VIEWER") setUserName("Auditor / Observer");
-                }}
-                className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 focus:outline-none"
-              >
-                <option value="OWNER">Project Owner (Final Authority)</option>
-                <option value="REVIEWER_GUIDE">Project Guide / Lead Reviewer</option>
-                <option value="CONTRIBUTOR">Specialist / Developer</option>
-                <option value="VIEWER">Auditor / Observer</option>
-              </select>
+              {currentView === "TASKS" && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                  <Columns3 className="w-4 h-4 text-zinc-400" />
+                  <span>{selectedProject?.name || "Tasks"}</span>
+                </div>
+              )}
+              {currentView === "PAGE" && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                  <FileText className="w-4 h-4 text-zinc-400" />
+                  <span>{pages.find((p) => p.id === selectedPageId)?.title || "Notes"}</span>
+                </div>
+              )}
+              {currentView === "DIARY" && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                  <Calendar className="w-4 h-4 text-zinc-400" />
+                  <span>Daily Diary</span>
+                </div>
+              )}
             </div>
           </div>
 
