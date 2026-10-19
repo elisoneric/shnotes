@@ -1,0 +1,53 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_URL: ${APP_URL}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      WORKSPACE_NAME: ${WORKSPACE_NAME:-My Workspace}
+      INDUNIX_API_KEY: ${INDUNIX_API_KEY}
+      INDUNIX_BASE_URL: ${INDUNIX_BASE_URL:-https://api.indunixai.com/v1}
+      INDUNIX_MODEL: ${INDUNIX_MODEL:-indunix-1-core}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-none}
+      MAIL_FROM: ${MAIL_FROM:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      NOTIFY_MIN_INTERVAL_MINUTES: ${NOTIFY_MIN_INTERVAL_MINUTES:-60}
+      NOTIFY_MAX_PER_DAY: ${NOTIFY_MAX_PER_DAY:-3}
+    volumes:
+      - uploads:/app/uploads
+    expose:
+      - "3000"   # Coolify's proxy attaches to this port; no host port published
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  uploads:

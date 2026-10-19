@@ -1,0 +1,207 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+enum WorkspaceRole {
+  OWNER
+  HOO               // Head of Operations: creates tasks, approves test results
+  TECH_ASSISTANT    // Triage & spec verification
+  DEVELOPER         // Writes technical recommendations & executes code
+  COLLABORATOR      // General team member
+  VIEWER            // Read-only member
+}
+
+enum TaskStage {
+  PROPOSED              // Raised by HOO
+  TA_REVIEW             // Triaged by Technical Assistant
+  DEV_ASSESSMENT        // Awaiting Developer recommendation
+  CONFIRMED_READY       // Scope confirmed, ready for dev
+  IN_PROGRESS           // Active development
+  READY_FOR_TESTING     // Dev finished, awaiting QA/HOO verification
+  APPROVED_CLEARED      // HOO approved
+  ARCHIVED              // Moved out of active views
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum CommentType {
+  STANDARD_CHAT         // Casual conversation on the task
+  TA_SPEC_NOTE          // TA assessment feedback
+  DEV_RECOMMENDATION    // Formal technical suggestions by developer
+  TESTING_FEEDBACK      // HOO QA issues or bug notes
+  STAGE_CHANGE_AUDIT    // Automated audit trail
+  AI_COPILOT_OUTPUT     // Indunix AI generated recommendations, QA checklists, or summaries
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String            // e.g. "Trustbricks"
+  slug        String            @unique
+  logoUrl     String?
+  members     WorkspaceMember[]
+  projects    Project[]
+  pages       Page[]
+  version     Int               @default(1)
+  deletedAt   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("workspaces")
+}
+
+model User {
+  id            String            @id @default(cuid())
+  email         String            @unique
+  name          String
+  passwordHash  String
+  avatarUrl     String?
+  role          WorkspaceRole     @default(DEVELOPER)
+  memberships   WorkspaceMember[]
+  assignedTasks Task[]            @relation("TaskAssignee")
+  createdTasks  Task[]            @relation("TaskCreator")
+  comments      TaskComment[]
+  sessions      AuthSession[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@map("users")
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        WorkspaceRole @default(COLLABORATOR)
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String    // e.g. "Equity Portal" or "HR Portal"
+  key         String    // e.g. "EQ" or "HR" (used for task IDs like EQ-104)
+  description String?
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  version     Int       @default(1)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, key])
+  @@map("projects")
+}
+
+model Task {
+  id                  String       @id @default(cuid())
+  projectTaskId       String       // Generates human identifiers (e.g., "EQ-42")
+  title               String
+  description         String?      @db.Text // Initial description from HOO
+  stage               TaskStage    @default(PROPOSED)
+  priority            TaskPriority @default(MEDIUM)
+  dueDate             DateTime?
+
+  // Governed Technical Fields
+  taReviewNotes       String?      @db.Text // Technical Assistant feedback
+  devRecommendation   String?      @db.Text // Developer technical solution/suggestions
+  devConfirmedAt      DateTime?             // When scope is locked
+  qaTestNotes         String?      @db.Text // Instructions for HOO on how to test
+  approvalSignoffNote String?      @db.Text // HOO sign-off verification
+
+  // Actors
+  creatorId           String
+  creator             User         @relation("TaskCreator", fields: [creatorId], references: [id])
+  assigneeId          String?
+  assignee            User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  projectId           String
+  project             Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Relationships
+  linkedPageId        String?
+  linkedPage          Page?        @relation(fields: [linkedPageId], references: [id], onDelete: SetNull)
+  comments            TaskComment[]
+  
+  order               Float        @default(0.0) // Kanban fractional indexing
+  isArchived          Boolean      @default(false)
+  version             Int          @default(1)
+  deletedAt           DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@unique([projectId, projectTaskId])
+  @@index([projectId, stage, isArchived])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id          String      @id @default(cuid())
+  taskId      String
+  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        CommentType @default(STANDARD_CHAT)
+  content     String      @db.Text
+  version     Int         @default(1)
+  deletedAt   DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([taskId, createdAt])
+  @@map("task_comments")
+}
+
+model Page {
+  id              String      @id @default(cuid())
+  title           String      @default("Untitled")
+  icon            String?
+  content         Json?       // Block-based document canvas JSON
+  isDiary         Boolean     @default(false)
+  diaryDate       DateTime?
+  secretToken     String?     @unique
+  workspaceId     String
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parentId        String?
+  parent          Page?       @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Page[]      @relation("PageTree")
+  tasks           Task[]
+  version         Int         @default(1)
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([workspaceId, isDiary, diaryDate])
+  @@map("pages")
+}
