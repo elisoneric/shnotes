@@ -11,7 +11,9 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "package:exe": "npx electron-builder --win",
+    "package:apk": "npx cap build android"
   },
   "dependencies": {
     "@prisma/client": "6.5.0",

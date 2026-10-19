@@ -10,6 +10,9 @@ import { AiChatDrawer } from "@/components/ai/AiChatDrawer";
 import { IosInstallModal } from "@/components/pwa/IosInstallModal";
 import { RegisterSw } from "@/components/pwa/RegisterSw";
 import { WorkspaceRole } from "@prisma/client";
+import { CreateProjectModal } from "@/components/projects/CreateProjectModal";
+import { ProfileSettingsModal } from "@/components/settings/ProfileSettingsModal";
+import { AdminConsole } from "@/components/admin/AdminConsole";
 import {
   FolderGit2,
   FileText,
@@ -29,6 +32,9 @@ import {
   Building2,
   Trash2,
   LogOut,
+  Settings,
+  ShieldCheck,
+  User,
 } from "lucide-react";
 
 export interface ShellProps {
@@ -44,7 +50,7 @@ export function Shell({ initialUser }: ShellProps = {}) {
   const { status, pendingCount, triggerSync, isSyncing } = useSync();
 
   // Navigation State
-  const [currentView, setCurrentView] = useState<"TASKS" | "PAGE" | "DIARY">("TASKS");
+  const [currentView, setCurrentView] = useState<"TASKS" | "PAGE" | "DIARY" | "ADMIN">("TASKS");
   const [projects, setProjects] = useState<LocalProject[]>([]);
   const [selectedProject, setSelectedProject] = useState<LocalProject | null>(null);
   const [pages, setPages] = useState<LocalPage[]>([]);
@@ -53,9 +59,14 @@ export function Shell({ initialUser }: ShellProps = {}) {
   // User, Workspace & Role State
   const [currentRole, setCurrentRole] = useState<WorkspaceRole>(initialUser?.role || "OWNER");
   const [userName, setUserName] = useState(initialUser?.name || "Project Owner");
+  const [userEmail, setUserEmail] = useState(initialUser?.email || "");
   const [userId, setUserId] = useState(initialUser?.id || "user_admin");
   const [workspaceName, setWorkspaceName] = useState("Enterprise Operations");
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+
+  // Modals state
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -114,6 +125,7 @@ export function Shell({ initialUser }: ShellProps = {}) {
       .then(async (data) => {
         if (data.authenticated) {
           if (data.user?.name) setUserName(data.user.name);
+          if (data.user?.email) setUserEmail(data.user.email);
           if (data.user?.id) setUserId(data.user.id);
           if (data.user?.role) setCurrentRole(data.user.role);
           if (data.workspace) {
@@ -133,6 +145,17 @@ export function Shell({ initialUser }: ShellProps = {}) {
       })
       .catch((err) => console.warn("Failed to load user session:", err));
   }, []);
+
+  const handleProjectCreated = (newProject: LocalProject) => {
+    setProjects((prev) => [newProject, ...prev]);
+    setSelectedProject(newProject);
+    setCurrentView("TASKS");
+    setIsCreateProjectOpen(false);
+  };
+
+  const handleProfileUpdated = (newName: string) => {
+    setUserName(newName);
+  };
 
   const handleLogout = async () => {
     try {
@@ -231,7 +254,16 @@ export function Shell({ initialUser }: ShellProps = {}) {
         <div className="flex-1 overflow-y-auto p-3 space-y-6">
           {/* Projects */}
           <div className="space-y-1">
-            <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Projects</div>
+            <div className="px-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+              <span>Projects</span>
+              <button
+                onClick={() => setIsCreateProjectOpen(true)}
+                title="Create project"
+                className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
             {projects.length === 0 ? (
               <div className="px-2 py-1 text-xs text-zinc-400">Loading projects...</div>
             ) : (
@@ -350,6 +382,25 @@ export function Shell({ initialUser }: ShellProps = {}) {
                 })}
             </div>
           )}
+          {/* Governance / Admin Console */}
+          {(currentRole === "OWNER" || currentRole === "HOO" || (currentRole as string) === "ADMIN") && (
+            <div className="space-y-1">
+              <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                Governance
+              </div>
+              <button
+                onClick={() => setCurrentView("ADMIN")}
+                className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
+                  currentView === "ADMIN"
+                    ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold"
+                    : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Admin Console</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Sync Status Badge (Bottom of Sidebar) */}
@@ -387,7 +438,11 @@ export function Shell({ initialUser }: ShellProps = {}) {
 
         {/* User Account & Logout Footer */}
         <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 flex items-center justify-between">
-          <div className="min-w-0 flex items-center gap-2">
+          <button
+            onClick={() => setIsProfileModalOpen(true)}
+            title="Profile & Preferences"
+            className="min-w-0 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+          >
             <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-200 shrink-0">
               {(userName || "U").slice(0, 1).toUpperCase()}
             </div>
@@ -395,14 +450,23 @@ export function Shell({ initialUser }: ShellProps = {}) {
               <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{userName}</p>
               <p className="text-[10px] text-zinc-400 truncate capitalize">{currentRole.toLowerCase().replace(/_/g, " ")}</p>
             </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            title="Sign Out"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
-          >
-            <LogOut className="w-4 h-4" />
           </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              title="Profile Settings"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -439,10 +503,25 @@ export function Shell({ initialUser }: ShellProps = {}) {
                   <span>Daily Diary</span>
                 </div>
               )}
+              {currentView === "ADMIN" && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                  <ShieldCheck className="w-4 h-4 text-zinc-400" />
+                  <span>Admin Console</span>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Profile Settings */}
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              title="Profile Settings"
+              className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+
             {/* Dark Mode Toggle */}
             <button
               onClick={toggleDarkMode}
@@ -487,11 +566,44 @@ export function Shell({ initialUser }: ShellProps = {}) {
           )}
 
           {currentView === "DIARY" && <DiaryView />}
+
+          {currentView === "ADMIN" && (
+            <AdminConsole
+              currentWorkspaceId={workspaceId || "default"}
+              currentWorkspaceName={workspaceName}
+              onWorkspaceRenamed={(newName) => setWorkspaceName(newName)}
+              onNavigateToProjects={() => setCurrentView("TASKS")}
+            />
+          )}
         </div>
       </main>
 
       {/* Indunix AI Assistant Slide-over Drawer */}
       <AiChatDrawer isOpen={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} />
+
+      {/* Create Project Modal */}
+      {isCreateProjectOpen && (
+        <CreateProjectModal
+          workspaceId={workspaceId || "default"}
+          currentUserId={userId}
+          currentUserName={userName}
+          onClose={() => setIsCreateProjectOpen(false)}
+          onProjectCreated={handleProjectCreated}
+        />
+      )}
+
+      {/* User Profile Settings Modal */}
+      {isProfileModalOpen && (
+        <ProfileSettingsModal
+          currentUserName={userName}
+          currentUserEmail={userEmail}
+          currentRole={currentRole}
+          darkMode={darkMode}
+          onToggleDarkMode={toggleDarkMode}
+          onClose={() => setIsProfileModalOpen(false)}
+          onProfileUpdated={handleProfileUpdated}
+        />
+      )}
     </div>
   );
 }

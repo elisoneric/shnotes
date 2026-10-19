@@ -1,0 +1,10 @@
+{
+  "appId": "com.shnotes.governance",
+  "appName": "ShNotes",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "http://localhost:3000/app",
+    "cleartext": true
+  }
+}

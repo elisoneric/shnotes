@@ -24,6 +24,8 @@ import {
   Link2,
   Shield,
   Eye,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 interface BlockItem {
@@ -45,6 +47,14 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
   const [secretToken, setSecretToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [slashMenuIndex, setSlashMenuIndex] = useState<number | null>(null);
+  const [fullWidth, setFullWidth] = useState(true);
+
+  const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  };
 
   // Invite Modal State
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
@@ -377,8 +387,18 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           <span className="text-zinc-500">{blocks.length} blocks</span>
         </div>
 
-        {/* Action Controls: Invite Collaborators & Secret Link */}
+        {/* Action Controls: Full Width, Invite Collaborators & Secret Link */}
         <div className="flex items-center gap-2">
+          {/* Full Width Canvas Toggle */}
+          <button
+            onClick={() => setFullWidth(!fullWidth)}
+            title={fullWidth ? "Standard width" : "Full width"}
+            className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 font-medium flex items-center gap-1.5 transition-colors"
+          >
+            {fullWidth ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{fullWidth ? "Standard Width" : "Full Width"}</span>
+          </button>
+
           {/* Invite Collaborator Button */}
           <button
             onClick={() => setInviteModalOpen(true)}
@@ -422,15 +442,24 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
       </div>
 
       {/* Main Canvas Document Area */}
-      <div className="max-w-3xl w-full mx-auto px-12 sm:px-16 py-10 space-y-4">
+      <div
+        className={`${
+          fullWidth ? "max-w-6xl w-full px-8 sm:px-14" : "max-w-3xl w-full px-12 sm:px-16"
+        } mx-auto py-10 space-y-4 transition-all duration-200`}
+      >
         {/* Document Title Input */}
-        <input
+        <textarea
           id="doc-title-input"
-          type="text"
           value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
+          rows={1}
+          ref={autoResizeTextarea}
+          onInput={(e) => autoResizeTextarea(e.currentTarget)}
+          onChange={(e) => {
+            handleTitleChange(e.target.value);
+            autoResizeTextarea(e.currentTarget);
+          }}
           placeholder="Document title"
-          className="w-full text-3xl sm:text-4xl font-bold tracking-tight bg-transparent text-zinc-900 dark:text-zinc-50 border-none outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-700 mb-6"
+          className="w-full text-3xl sm:text-4xl font-bold tracking-tight bg-transparent text-zinc-900 dark:text-zinc-50 border-none outline-none resize-none overflow-hidden break-words whitespace-pre-wrap placeholder:text-zinc-300 dark:placeholder:text-zinc-700 mb-6 leading-tight"
         />
 
         {/* Blocks Rendering with Enter and Keyboard Navigation */}
@@ -438,7 +467,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           {blocks.map((block, idx) => (
             <div key={block.id} className="group relative flex items-start">
               {/* Block Handle / Add Button strictly placed before typing start */}
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -left-12 top-1.5 flex items-center gap-0.5 z-10 select-none">
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -left-11 top-1.5 flex items-center gap-0.5 z-10 select-none">
                 <button
                   type="button"
                   onClick={() => setSlashMenuIndex(slashMenuIndex === idx ? null : idx)}
@@ -460,30 +489,40 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
               {/* Block Content by Type */}
               <div className="flex-1 min-w-0">
                 {block.type === "heading" && block.level === 1 && (
-                  <input
+                  <textarea
                     id={`block-input-${block.id}`}
-                    type="text"
                     value={block.text || ""}
+                    rows={1}
+                    ref={autoResizeTextarea}
+                    onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
                     onBlur={() => setFocusedBlockId(null)}
-                    onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                    onChange={(e) => {
+                      handleBlockTextChange(block.id, e.target.value);
+                      autoResizeTextarea(e.currentTarget);
+                    }}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
                     placeholder="Heading 1"
-                    className="w-full text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-50 outline-none pt-4 pb-1"
+                    className="w-full text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-50 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap pt-4 pb-1 leading-snug"
                   />
                 )}
 
                 {block.type === "heading" && block.level === 2 && (
-                  <input
+                  <textarea
                     id={`block-input-${block.id}`}
-                    type="text"
                     value={block.text || ""}
+                    rows={1}
+                    ref={autoResizeTextarea}
+                    onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
                     onBlur={() => setFocusedBlockId(null)}
-                    onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                    onChange={(e) => {
+                      handleBlockTextChange(block.id, e.target.value);
+                      autoResizeTextarea(e.currentTarget);
+                    }}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
                     placeholder="Heading 2"
-                    className="w-full text-xl font-semibold bg-transparent text-zinc-900 dark:text-zinc-100 outline-none pt-3 pb-1"
+                    className="w-full text-xl font-semibold bg-transparent text-zinc-900 dark:text-zinc-100 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap pt-3 pb-1 leading-snug"
                   />
                 )}
 
@@ -491,52 +530,69 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                   <textarea
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
+                    rows={1}
+                    ref={autoResizeTextarea}
+                    onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
                     onBlur={() => setFocusedBlockId(null)}
-                    onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                    onChange={(e) => {
+                      handleBlockTextChange(block.id, e.target.value);
+                      autoResizeTextarea(e.currentTarget);
+                    }}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
                     placeholder="Type '/' for commands"
-                    rows={1}
-                    className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none leading-relaxed placeholder:text-zinc-400 block"
+                    className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed placeholder:text-zinc-400 block"
                   />
                 )}
 
                 {block.type === "bullet" && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-400 select-none">•</span>
-                    <input
+                  <div className="flex items-start gap-2">
+                    <span className="text-zinc-400 select-none mt-0.5">•</span>
+                    <textarea
                       id={`block-input-${block.id}`}
-                      type="text"
                       value={block.text || ""}
+                      rows={1}
+                      ref={autoResizeTextarea}
+                      onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
-                      onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                      onChange={(e) => {
+                        handleBlockTextChange(block.id, e.target.value);
+                        autoResizeTextarea(e.currentTarget);
+                      }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="List item"
-                      className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none"
+                      className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>
                 )}
 
                 {block.type === "check" && (
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-start gap-2.5">
                     <input
                       type="checkbox"
                       checked={Boolean(block.checked)}
                       onChange={() => handleToggleCheck(block.id)}
-                      className="rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 focus:ring-0 cursor-pointer"
+                      className="mt-1 rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 focus:ring-0 cursor-pointer"
                     />
-                    <input
+                    <textarea
                       id={`block-input-${block.id}`}
-                      type="text"
                       value={block.text || ""}
+                      rows={1}
+                      ref={autoResizeTextarea}
+                      onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
-                      onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                      onChange={(e) => {
+                        handleBlockTextChange(block.id, e.target.value);
+                        autoResizeTextarea(e.currentTarget);
+                      }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="To-do item"
-                      className={`w-full text-sm bg-transparent outline-none ${
-                        block.checked ? "line-through text-zinc-400 dark:text-zinc-500" : "text-zinc-800 dark:text-zinc-200"
+                      className={`w-full text-sm bg-transparent outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed ${
+                        block.checked
+                          ? "line-through text-zinc-400 dark:text-zinc-500"
+                          : "text-zinc-800 dark:text-zinc-200"
                       }`}
                     />
                   </div>
@@ -548,29 +604,39 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     <textarea
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
+                      rows={1}
+                      ref={autoResizeTextarea}
+                      onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
-                      onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                      onChange={(e) => {
+                        handleBlockTextChange(block.id, e.target.value);
+                        autoResizeTextarea(e.currentTarget);
+                      }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="Callout text"
-                      rows={1}
-                      className="w-full text-xs font-medium bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none"
+                      className="w-full text-xs font-medium bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>
                 )}
 
                 {block.type === "quote" && (
                   <div className="border-l-4 border-zinc-300 dark:border-zinc-700 pl-4 py-1">
-                    <input
+                    <textarea
                       id={`block-input-${block.id}`}
-                      type="text"
                       value={block.text || ""}
+                      rows={1}
+                      ref={autoResizeTextarea}
+                      onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
-                      onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                      onChange={(e) => {
+                        handleBlockTextChange(block.id, e.target.value);
+                        autoResizeTextarea(e.currentTarget);
+                      }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="Quote text"
-                      className="w-full text-sm italic bg-transparent text-zinc-600 dark:text-zinc-400 outline-none"
+                      className="w-full text-sm italic bg-transparent text-zinc-600 dark:text-zinc-400 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>
                 )}
@@ -580,13 +646,18 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     <textarea
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
+                      rows={2}
+                      ref={autoResizeTextarea}
+                      onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
-                      onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                      onChange={(e) => {
+                        handleBlockTextChange(block.id, e.target.value);
+                        autoResizeTextarea(e.currentTarget);
+                      }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       placeholder="Code snippet"
-                      rows={2}
-                      className="w-full font-mono text-xs bg-transparent text-zinc-100 outline-none resize-none"
+                      className="w-full font-mono text-xs bg-transparent text-zinc-100 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>
                 )}

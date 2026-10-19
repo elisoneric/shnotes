@@ -180,6 +180,45 @@ export async function POST(req: Request) {
               },
             });
           }
+        } else if (entity === "project") {
+          if (action === "UPSERT") {
+            const existing = await prisma.project.findUnique({ where: { id: entityId } });
+            if (existing) {
+              await prisma.project.update({
+                where: { id: entityId },
+                data: {
+                  name: payload.name !== undefined ? payload.name : existing.name,
+                  description: payload.description !== undefined ? payload.description : existing.description,
+                  ownerName: payload.ownerName !== undefined ? payload.ownerName : existing.ownerName,
+                  guideName: payload.guideName !== undefined ? payload.guideName : existing.guideName,
+                  version: { increment: 1 },
+                },
+              });
+            } else {
+              const targetWsId = payload.workspaceId && workspaceIds.includes(payload.workspaceId)
+                ? payload.workspaceId
+                : workspaceIds[0];
+
+              if (targetWsId) {
+                await prisma.project.create({
+                  data: {
+                    id: entityId,
+                    name: payload.name || "Untitled Project",
+                    key: payload.key || "PRJ",
+                    description: payload.description || null,
+                    workspaceId: targetWsId,
+                    ownerName: payload.ownerName || currentUser.name,
+                    guideName: payload.guideName || null,
+                  },
+                });
+              }
+            }
+          } else if (action === "DELETE") {
+            await prisma.project.update({
+              where: { id: entityId },
+              data: { deletedAt: new Date(), version: { increment: 1 } },
+            });
+          }
         }
 
         appliedMutationIds.push(clientMutationId);
