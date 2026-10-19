@@ -222,9 +222,12 @@ export function SmtpAdminPanel() {
               type="text"
               value={config.host}
               onChange={(e) => setConfig({ ...config, host: e.target.value })}
-              placeholder="mail.esam.com.ng or smtp.relay.com"
+              placeholder="87.98.128.166 or mail.indunixai.com"
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
+            <p className="text-[10px] text-zinc-500">
+              cPanel server hostname or direct server IP (such as 87.98.128.166).
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -291,6 +294,9 @@ export function SmtpAdminPanel() {
               placeholder="ShNotes Enterprise <noreply@esam.com.ng>"
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
+            <p className="text-[10px] text-zinc-500">
+              Format: &quot;Display Name&quot; &lt;user@domain.com&gt; or simple email.
+            </p>
           </div>
 
           <div className="space-y-1.5">

@@ -79,21 +79,54 @@ export function createTransporter(config: SmtpConfig) {
     throw new Error("SMTP host is not configured");
   }
 
+  const cleanHost = config.host.trim();
+  const isIp = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(cleanHost);
+
+  // If host is an IP, derive the TLS servername SNI from the user email or from domain
+  let servername: string | undefined = undefined;
+  if (isIp) {
+    if (config.user && config.user.includes("@")) {
+      servername = config.user.split("@")[1].trim();
+    } else if (config.from && config.from.includes("@")) {
+      const match = config.from.match(/@([a-zA-Z0-9.-]+)/);
+      if (match) servername = match[1];
+    }
+  }
+
   return nodemailer.createTransport({
-    host: config.host,
+    host: cleanHost,
     port: config.port,
     secure: config.secure,
+    connectionTimeout: 10000, // 10s connection timeout
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: config.user
       ? {
-          user: config.user,
+          user: config.user.trim(),
           pass: config.pass,
         }
       : undefined,
     tls: {
-      rejectUnauthorized: false, // Prevents self-signed cert blocks on internal mail servers
+      rejectUnauthorized: false, // Prevents certificate verification failures when using raw IP or self-signed certs
+      servername: servername || undefined,
     },
   });
 }
+
+/**
+ * Normalizes a sender address so that if only a name is given, it safely attaches the username email.
+ */
+export function normalizeSenderAddress(from: string, user: string): string {
+  const cleanFrom = from.trim();
+  if (!cleanFrom) {
+    return user ? `"ShNotes Enterprise" <${user}>` : "noreply@note.esam.com.ng";
+  }
+  if (!cleanFrom.includes("@") && user && user.includes("@")) {
+    return `"${cleanFrom}" <${user.trim()}>`;
+  }
+  return cleanFrom;
+}
+
 
 /**
  * Tests the SMTP server connection handshake and optionally sends a real verification email.
@@ -118,7 +151,7 @@ export async function testSmtpConnection(
 
     if (recipientEmail && recipientEmail.includes("@")) {
       const info = await transporter.sendMail({
-        from: config.from,
+        from: normalizeSenderAddress(config.from, config.user),
         to: recipientEmail.trim(),
         subject: "ShNotes SMTP Verification Handshake Successful",
         text: `This is a test notification from ShNotes Enterprise. Your SMTP connection to ${config.host}:${config.port} is operational with latency ${latencyMs}ms.`,
@@ -200,7 +233,7 @@ export async function sendDocumentInviteEmail(params: {
         : "Can View";
 
     await transporter.sendMail({
-      from: config.from,
+      from: normalizeSenderAddress(config.from, config.user),
       to: params.to.trim(),
       subject: `${params.inviterName} invited you to collaborate on "${params.documentTitle}"`,
       text: `${params.inviterName} has invited you to collaborate on "${params.documentTitle}" in ${params.workspaceName}.\n\nPermission: ${roleLabel}\n${params.allowGuest ? "Guest access is enabled.\n" : ""}Access URL: ${params.inviteUrl}\n\nThis invitation link expires in 14 days.`,
