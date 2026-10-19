@@ -396,7 +396,6 @@ export function SharePopover({
                   required
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="collaborator@organization.com"
                   className="flex-1 text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
                 />
 
@@ -653,7 +652,6 @@ export function SharePopover({
                     required
                     value={subscriberEmail}
                     onChange={(e) => setSubscriberEmail(e.target.value)}
-                    placeholder="reader@organization.com"
                     className="flex-1 text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none"
                   />
                   <button

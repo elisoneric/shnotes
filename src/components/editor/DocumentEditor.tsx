@@ -597,7 +597,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
             handleTitleChange(e.target.value);
             autoResizeTextarea(e.currentTarget);
           }}
-          placeholder="Document title"
           className="w-full text-3xl sm:text-4xl font-bold tracking-tight bg-transparent text-zinc-900 dark:text-zinc-50 border-none outline-none resize-none overflow-hidden break-words whitespace-pre-wrap placeholder:text-zinc-300 dark:placeholder:text-zinc-700 mb-6 leading-tight"
         />
 
@@ -641,7 +640,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       autoResizeTextarea(e.currentTarget);
                     }}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                    placeholder="Heading 1"
                     className="w-full text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-50 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap pt-4 pb-1 leading-snug"
                   />
                 )}
@@ -660,7 +658,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       autoResizeTextarea(e.currentTarget);
                     }}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                    placeholder="Heading 2"
                     className="w-full text-xl font-semibold bg-transparent text-zinc-900 dark:text-zinc-100 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap pt-3 pb-1 leading-snug"
                   />
                 )}
@@ -679,7 +676,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       autoResizeTextarea(e.currentTarget);
                     }}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                    placeholder="Type '/' for commands"
                     className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed placeholder:text-zinc-400 block"
                   />
                 )}
@@ -700,7 +696,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                         autoResizeTextarea(e.currentTarget);
                       }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                      placeholder="List item"
                       className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>
@@ -727,7 +722,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                         autoResizeTextarea(e.currentTarget);
                       }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                      placeholder="To-do item"
                       className={`w-full text-sm bg-transparent outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed ${
                         block.checked
                           ? "line-through text-zinc-400 dark:text-zinc-500"
@@ -753,7 +747,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                         autoResizeTextarea(e.currentTarget);
                       }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                      placeholder="Callout text"
                       className="w-full text-xs font-medium bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>
@@ -774,7 +767,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                         autoResizeTextarea(e.currentTarget);
                       }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                      placeholder="Quote text"
                       className="w-full text-sm italic bg-transparent text-zinc-600 dark:text-zinc-400 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>
@@ -795,7 +787,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                         autoResizeTextarea(e.currentTarget);
                       }}
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                      placeholder="Code snippet"
                       className="w-full font-mono text-xs bg-transparent text-zinc-100 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
                   </div>

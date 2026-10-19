@@ -107,7 +107,6 @@ export function CreateProjectModal({
             autoFocus
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="Project title"
             className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
         </div>
@@ -122,7 +121,6 @@ export function CreateProjectModal({
             maxLength={4}
             value={key}
             onChange={(e) => setKey(e.target.value.toUpperCase())}
-            placeholder="KEY"
             className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
         </div>
@@ -134,7 +132,6 @@ export function CreateProjectModal({
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description (optional)"
             rows={2}
             className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />

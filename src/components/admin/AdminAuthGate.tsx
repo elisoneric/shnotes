@@ -147,7 +147,6 @@ export function AdminAuthGate() {
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="admin@esam.com.ng"
                   className="w-full text-xs px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono transition-colors"
                 />
               </div>
@@ -163,7 +162,6 @@ export function AdminAuthGate() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter administrator password"
                   className="w-full text-xs px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono transition-colors"
                 />
               </div>

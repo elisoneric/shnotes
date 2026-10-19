@@ -386,7 +386,6 @@ export function SystemAdminPage({ onSignOut }: SystemAdminPageProps) {
                 type="text"
                 value={resetInput}
                 onChange={(e) => setResetInput(e.target.value)}
-                placeholder="RESET"
                 className="w-full text-xs px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-rose-700 font-mono"
                 autoFocus
               />

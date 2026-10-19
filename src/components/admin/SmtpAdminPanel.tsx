@@ -222,7 +222,6 @@ export function SmtpAdminPanel() {
               type="text"
               value={config.host}
               onChange={(e) => setConfig({ ...config, host: e.target.value })}
-              placeholder="87.98.128.166 or mail.indunixai.com"
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
             <p className="text-[10px] text-zinc-500">
@@ -238,7 +237,6 @@ export function SmtpAdminPanel() {
               type="number"
               value={config.port}
               onChange={(e) => setConfig({ ...config, port: Number(e.target.value) })}
-              placeholder="587"
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
           </div>
@@ -253,7 +251,6 @@ export function SmtpAdminPanel() {
               type="text"
               value={config.user}
               onChange={(e) => setConfig({ ...config, user: e.target.value })}
-              placeholder="admin@esam.com.ng"
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
           </div>
@@ -276,7 +273,6 @@ export function SmtpAdminPanel() {
               type={showPassword ? "text" : "password"}
               value={config.pass}
               onChange={(e) => setConfig({ ...config, pass: e.target.value })}
-              placeholder={config.hasPassword ? "••••••••" : "Enter mail password"}
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
           </div>
@@ -291,7 +287,6 @@ export function SmtpAdminPanel() {
               type="text"
               value={config.from}
               onChange={(e) => setConfig({ ...config, from: e.target.value })}
-              placeholder="ShNotes Enterprise <noreply@esam.com.ng>"
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
             <p className="text-[10px] text-zinc-500">
@@ -307,7 +302,6 @@ export function SmtpAdminPanel() {
               type="text"
               value={config.appUrl}
               onChange={(e) => setConfig({ ...config, appUrl: e.target.value })}
-              placeholder="https://note.esam.com.ng"
               className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
             />
           </div>
@@ -357,7 +351,6 @@ export function SmtpAdminPanel() {
             type="email"
             value={testEmail}
             onChange={(e) => setTestEmail(e.target.value)}
-            placeholder="admin@esam.com.ng"
             className="flex-1 text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 font-mono"
           />
           <button
