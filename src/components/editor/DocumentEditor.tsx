@@ -29,14 +29,17 @@ import {
   MoreHorizontal,
   Type,
   AlignLeft,
+  Image as ImageIcon,
+  Upload,
 } from "lucide-react";
 import { SharePopover } from "./SharePopover";
 
 interface BlockItem {
   id: string;
-  type: "paragraph" | "heading" | "bullet" | "check" | "quote" | "code" | "callout" | "divider";
+  type: "paragraph" | "heading" | "bullet" | "check" | "quote" | "code" | "callout" | "divider" | "image";
   level?: number;
   text?: string;
+  url?: string;
   checked?: boolean;
 }
 
@@ -59,12 +62,38 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
 
-  const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
+  // Robust, scroll-preserving auto-resize for textareas to eliminate scroll jumps on long text
+  const textareaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
+
+  const autoResizeTextarea = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    const container = el.closest(".overflow-y-auto");
+    const prevScrollTop = container ? container.scrollTop : 0;
+
+    el.style.height = "0px";
+    const targetHeight = Math.max(el.scrollHeight, 24);
+    el.style.height = `${targetHeight}px`;
+
+    // Immediately restore parent container scroll to prevent upward jumping
+    if (container && container.scrollTop !== prevScrollTop) {
+      container.scrollTop = prevScrollTop;
     }
-  };
+  }, []);
+
+  const registerTextarea = useCallback(
+    (id: string, el: HTMLTextAreaElement | null) => {
+      if (el) {
+        const isFirst = !textareaRefs.current.has(id);
+        textareaRefs.current.set(id, el);
+        if (isFirst) {
+          autoResizeTextarea(el);
+        }
+      } else {
+        textareaRefs.current.delete(id);
+      }
+    },
+    [autoResizeTextarea]
+  );
 
   // Invite Modal State
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
@@ -269,6 +298,82 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     saveContent(title, updated, secretToken);
   };
 
+  const applyImageUrl = (url: string, afterIndex?: number, existingBlockId?: string) => {
+    if (existingBlockId) {
+      const updated = blocks.map((b) => (b.id === existingBlockId ? { ...b, url } : b));
+      setBlocks(updated);
+      saveContent(title, updated, secretToken);
+    } else {
+      const newBlock: BlockItem = {
+        id: `b_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type: "image",
+        url,
+        text: "",
+      };
+      let updated: BlockItem[];
+      if (afterIndex !== undefined) {
+        updated = [...blocks.slice(0, afterIndex + 1), newBlock, ...blocks.slice(afterIndex + 1)];
+      } else {
+        updated = [...blocks, newBlock];
+      }
+      setBlocks(updated);
+      setSlashMenuIndex(null);
+      saveContent(title, updated, secretToken);
+    }
+  };
+
+  const handleImageUpload = (file: File, afterIndex?: number, existingBlockId?: string) => {
+    if (!file.type.startsWith("image/")) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new (window as any).Image();
+      img.onload = () => {
+        let { width, height } = img;
+        const maxDim = 1600;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            applyImageUrl(canvas.toDataURL("image/jpeg", 0.85), afterIndex, existingBlockId);
+            return;
+          }
+        }
+        applyImageUrl(dataUrl, afterIndex, existingBlockId);
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCanvasPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleImageUpload(file);
+          return;
+        }
+      }
+    }
+  };
+
   // Keyboard navigation & block management
   const handleKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -450,7 +555,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
   const containerWidth = layout === "full" ? "max-w-6xl w-full px-4 sm:px-10" : "max-w-3xl w-full px-4 sm:px-8";
 
   return (
-    <div className={`flex-1 flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto ${fontClass}`}>
+    <div
+      onPaste={handleCanvasPaste}
+      className={`flex-1 flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto ${fontClass}`}
+    >
       {/* Editor Top Bar: Share & Status */}
       <div className="sticky top-0 z-20 px-4 sm:px-8 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0">
@@ -591,7 +699,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           id="doc-title-input"
           value={title}
           rows={1}
-          ref={autoResizeTextarea}
+          ref={(el) => registerTextarea("doc-title-input", el)}
           onInput={(e) => autoResizeTextarea(e.currentTarget)}
           onChange={(e) => {
             handleTitleChange(e.target.value);
@@ -631,7 +739,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
                     rows={1}
-                    ref={autoResizeTextarea}
+                    ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                     onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
                     onBlur={() => setFocusedBlockId(null)}
@@ -649,7 +757,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
                     rows={1}
-                    ref={autoResizeTextarea}
+                    ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                     onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
                     onBlur={() => setFocusedBlockId(null)}
@@ -667,7 +775,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
                     rows={1}
-                    ref={autoResizeTextarea}
+                    ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                     onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
                     onBlur={() => setFocusedBlockId(null)}
@@ -676,7 +784,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       autoResizeTextarea(e.currentTarget);
                     }}
                     onKeyDown={(e) => handleKeyDown(e, block, idx)}
-                    className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed placeholder:text-zinc-400 block"
+                    className="w-full text-sm bg-transparent text-zinc-800 dark:text-zinc-200 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed block"
                   />
                 )}
 
@@ -687,7 +795,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
-                      ref={autoResizeTextarea}
+                      ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
@@ -713,7 +821,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
-                      ref={autoResizeTextarea}
+                      ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
@@ -738,7 +846,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
-                      ref={autoResizeTextarea}
+                      ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
@@ -758,7 +866,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
-                      ref={autoResizeTextarea}
+                      ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
@@ -778,7 +886,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={2}
-                      ref={autoResizeTextarea}
+                      ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
                       onBlur={() => setFocusedBlockId(null)}
@@ -789,6 +897,108 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       onKeyDown={(e) => handleKeyDown(e, block, idx)}
                       className="w-full font-mono text-xs bg-transparent text-zinc-100 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap leading-relaxed"
                     />
+                  </div>
+                )}
+
+                {block.type === "image" && (
+                  <div className="w-full my-3">
+                    {!block.url ? (
+                      <div
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "copy";
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (e.dataTransfer.files?.[0]) {
+                            handleImageUpload(e.dataTransfer.files[0], undefined, block.id);
+                          }
+                        }}
+                        className="border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 bg-zinc-50/50 dark:bg-zinc-900/30 transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500">
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-center gap-2">
+                          <label className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 cursor-pointer flex items-center gap-1.5 shadow-xs">
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Upload Picture</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files?.[0]) {
+                                  handleImageUpload(e.target.files[0], undefined, block.id);
+                                }
+                              }}
+                            />
+                          </label>
+                          <span className="text-[11px] text-zinc-400">or paste from clipboard / enter web URL</span>
+                        </div>
+                        <div className="flex items-center gap-2 w-full max-w-sm mt-1">
+                          <input
+                            type="url"
+                            value={block.text || ""}
+                            onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                            className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (block.text?.trim()) {
+                                applyImageUrl(block.text.trim(), undefined, block.id);
+                              }
+                            }}
+                            disabled={!block.text?.trim()}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 cursor-pointer"
+                          >
+                            Embed
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="group/img relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={block.url}
+                          alt={block.text || "Attached Picture"}
+                          className="w-full max-h-[600px] object-contain rounded-2xl"
+                          loading="lazy"
+                        />
+                        <div className="absolute top-2 right-2 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1.5 bg-black/75 backdrop-blur-xs p-1 rounded-lg">
+                          <label className="p-1 rounded text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer" title="Replace picture">
+                            <Upload className="w-3.5 h-3.5" />
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files?.[0]) {
+                                  handleImageUpload(e.target.files[0], undefined, block.id);
+                                }
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => removeBlock(block.id)}
+                            className="p-1 rounded text-zinc-300 hover:text-rose-400 hover:bg-white/10 cursor-pointer"
+                            title="Delete picture"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="p-2 border-t border-zinc-100 dark:border-zinc-800/60 bg-white/50 dark:bg-zinc-950/50">
+                          <input
+                            type="text"
+                            value={block.text || ""}
+                            onChange={(e) => handleBlockTextChange(block.id, e.target.value)}
+                            className="w-full text-center text-xs text-zinc-500 dark:text-zinc-400 bg-transparent outline-none italic"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -857,6 +1067,13 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     <span>Code Snippet</span>
                   </button>
                   <button
+                    onClick={() => addBlock("image", 1, idx)}
+                    className="w-full px-2.5 py-1.5 text-xs text-left rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 text-zinc-700 dark:text-zinc-300"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Picture / Image</span>
+                  </button>
+                  <button
                     onClick={() => addBlock("divider", 1, idx)}
                     className="w-full px-2.5 py-1.5 text-xs text-left rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 text-zinc-700 dark:text-zinc-300"
                   >
@@ -870,13 +1087,20 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
         </div>
 
         {/* Bottom Add Block Trigger */}
-        <div className="pt-6">
+        <div className="pt-6 flex items-center gap-2">
           <button
             onClick={() => addBlock("paragraph")}
-            className="text-xs px-3 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-1.5 transition-colors"
+            className="text-xs px-3 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add block</span>
+          </button>
+          <button
+            onClick={() => addBlock("image")}
+            className="text-xs px-3 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Add picture</span>
           </button>
         </div>
       </div>
