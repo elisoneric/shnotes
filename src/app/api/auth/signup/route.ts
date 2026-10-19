@@ -13,9 +13,9 @@ export async function POST(req: Request) {
     await ensureSeedData();
     const { name, email, password, workspaceName, projectName, projectKey } = await req.json();
 
-    if (!name || !email || !password || !workspaceName) {
+    if (!name || !email || !password) {
       return NextResponse.json(
-        { error: "Name, email, password, and workspace name are required." },
+        { error: "Name, email, and password are required." },
         { status: 400 }
       );
     }
@@ -33,8 +33,9 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = hashPassword(password);
+    const effectiveWorkspaceName = workspaceName?.trim() || `${name.trim().split(" ")[0]}'s Workspace`;
     const slug =
-      workspaceName
+      effectiveWorkspaceName
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "") +
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
 
       const workspace = await tx.workspace.create({
         data: {
-          name: workspaceName.trim(),
+          name: effectiveWorkspaceName,
           slug,
           members: {
             create: {
@@ -66,7 +67,7 @@ export async function POST(req: Request) {
       });
 
       const pName = projectName?.trim() || "General Tasks";
-      const pKey = (projectKey?.trim() || workspaceName.slice(0, 3)).toUpperCase().replace(/[^A-Z]/g, "PR");
+      const pKey = (projectKey?.trim() || effectiveWorkspaceName.slice(0, 3)).toUpperCase().replace(/[^A-Z]/g, "PR");
 
       const project = await tx.project.create({
         data: {
