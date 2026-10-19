@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import crypto from "crypto";
 import { WorkspaceRole } from "@prisma/client";
+import { sendDocumentInviteEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
 
     const token = "inv_" + crypto.randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days validity
+    const cleanEmail = email?.trim().toLowerCase() || null;
 
     const invite = await prisma.workspaceInvite.create({
       data: {
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
         allowGuest: Boolean(allowGuest),
         workspaceId: membership.workspaceId,
         pageId: pageId || null,
-        email: email?.trim().toLowerCase() || null,
+        email: cleanEmail,
         invitedById: user.id,
         expiresAt,
       },
@@ -50,15 +52,45 @@ export async function POST(req: Request) {
     const origin = `${proto}://${host}`;
     const inviteUrl = `${origin}/invite/${invite.token}`;
 
+    let emailSent = false;
+    let emailStatus = "not_requested";
+
+    if (cleanEmail) {
+      let pageTitle = "Untitled Document";
+      if (pageId) {
+        const page = await prisma.page.findUnique({
+          where: { id: pageId },
+          select: { title: true },
+        });
+        if (page?.title) pageTitle = page.title;
+      }
+
+      const emailResult = await sendDocumentInviteEmail({
+        to: cleanEmail,
+        inviterName: user.name || user.email,
+        documentTitle: pageTitle,
+        workspaceName: membership.workspace.name,
+        inviteUrl,
+        role: invite.role,
+        allowGuest: invite.allowGuest,
+      });
+
+      emailSent = emailResult.ok;
+      emailStatus = emailResult.ok ? "sent" : emailResult.reason || "failed";
+    }
+
     return NextResponse.json({
       ok: true,
       invite: {
         id: invite.id,
         token: invite.token,
+        email: invite.email,
         role: invite.role,
         allowGuest: invite.allowGuest,
         expiresAt: invite.expiresAt,
         inviteUrl,
+        emailSent,
+        emailStatus,
       },
     });
   } catch (err: any) {
@@ -128,3 +160,26 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: err.message || "Failed to fetch invites" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { inviteId } = await req.json();
+    if (!inviteId) {
+      return NextResponse.json({ error: "Invite ID required" }, { status: 400 });
+    }
+
+    await prisma.workspaceInvite.delete({
+      where: { id: inviteId },
+    });
+
+    return NextResponse.json({ ok: true, message: "Invitation revoked" });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to revoke invitation" }, { status: 500 });
+  }
+}
+

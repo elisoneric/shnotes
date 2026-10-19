@@ -17,9 +17,15 @@ import {
   RefreshCw,
   ToggleLeft,
   ToggleRight,
+  LogOut,
 } from "lucide-react";
+import { SmtpAdminPanel } from "@/components/admin/SmtpAdminPanel";
 
-export function SystemAdminPage() {
+interface SystemAdminPageProps {
+  onSignOut?: () => void;
+}
+
+export function SystemAdminPage({ onSignOut }: SystemAdminPageProps) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,15 +52,29 @@ export function SystemAdminPage() {
     fetchMetrics();
   }, []);
 
+  const handleSignOut = async () => {
+    if (onSignOut) {
+      onSignOut();
+      return;
+    }
+    try {
+      await fetch("/api/admin/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    } catch {
+      window.location.href = "/login";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-8 font-sans selection:bg-zinc-800">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Navigation / Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <Link
               href="/app"
               className="p-2 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-100 transition-colors"
+              title="Return to Workspace"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
@@ -66,19 +86,29 @@ export function SystemAdminPage() {
                 </h1>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Superadmin Layer: Isolated tenant telemetry, system health, and feature flags.
+                Superadmin Layer: Isolated tenant telemetry, SMTP delivery, system health, and feature flags.
               </p>
             </div>
           </div>
 
-          <button
-            onClick={fetchMetrics}
-            disabled={loading}
-            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-zinc-300 font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>Refresh Telemetry</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={fetchMetrics}
+              disabled={loading}
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-zinc-300 font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              <span>Refresh Telemetry</span>
+            </button>
+
+            <button
+              onClick={handleSignOut}
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-rose-950/40 hover:border-rose-800 text-zinc-400 hover:text-rose-300 font-medium flex items-center gap-1.5 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -164,6 +194,9 @@ export function SystemAdminPage() {
             </div>
           </div>
         </div>
+
+        {/* Dedicated Outbound SMTP Subsystem */}
+        <SmtpAdminPanel />
 
         {/* Feature Flags Grid */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">

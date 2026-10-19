@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword, createSession, getSessionUser, COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth";
 import { WorkspaceRole, TaskStage, TaskPriority } from "@prisma/client";
 import { ensureSeedData } from "@/lib/seed";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     const isExpired = invite.expiresAt < new Date();
     const isAccepted = Boolean(invite.acceptedAt);
 
+    let pageSecretToken = invite.page?.secretToken || null;
+    if (invite.allowGuest && invite.page && !pageSecretToken) {
+      pageSecretToken = "pub_" + crypto.randomBytes(24).toString("hex");
+      await prisma.page.update({
+        where: { id: invite.page.id },
+        data: { secretToken: pageSecretToken },
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       invite: {
@@ -39,7 +49,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
         workspaceId: invite.workspace.id,
         pageId: invite.page?.id || null,
         pageTitle: invite.page?.title || null,
-        pageSecretToken: invite.page?.secretToken || null,
+        pageSecretToken,
       },
     });
   } catch (err: any) {

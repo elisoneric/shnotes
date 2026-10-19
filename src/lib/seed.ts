@@ -66,6 +66,16 @@ export async function reconcileDatabaseSchema() {
       CREATE UNIQUE INDEX IF NOT EXISTS "page_subscribers_pageId_email_key" ON "page_subscribers"("pageId", "email");
     `);
 
+    // 5. System settings table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "system_settings" (
+        "key" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "system_settings_pkey" PRIMARY KEY ("key")
+      );
+    `);
+
     schemaReconciled = true;
   } catch (err) {
     console.warn("[reconcileDatabaseSchema] Schema auto-reconcile note:", err);

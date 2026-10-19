@@ -290,3 +290,12 @@ model PageCollaborator {
   @@index([userId])
   @@map("page_collaborators")
 }
+
+model SystemSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+

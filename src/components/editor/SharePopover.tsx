@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { LocalPage, localDb } from "@/lib/dexie";
+import { LocalPage } from "@/lib/dexie";
 import {
   Globe,
   Users,
@@ -14,8 +14,10 @@ import {
   UserPlus,
   Trash2,
   Lock,
+  Send,
+  RefreshCw,
+  ExternalLink,
 } from "lucide-react";
-import { syncManager } from "@/lib/sync";
 
 interface SharePopoverProps {
   page: LocalPage;
@@ -31,19 +33,39 @@ interface StaffMember {
   role: string;
 }
 
+interface PendingInvite {
+  id: string;
+  token: string;
+  email: string | null;
+  role: string;
+  allowGuest: boolean;
+  expiresAt: string;
+  inviteUrl: string;
+}
+
 export function SharePopover({
   page,
   workspaceId,
   onUpdatePage,
   onClose,
 }: SharePopoverProps) {
-  const [activeTab, setActiveTab] = useState<"COLLABORATORS" | "PUBLIC">("COLLABORATORS");
+  const [activeTab, setActiveTab] = useState<"INVITE" | "COLLABORATORS" | "PUBLIC">("INVITE");
   const [isPublished, setIsPublished] = useState<boolean>(Boolean(page.secretToken));
   const [secretToken, setSecretToken] = useState<string>(page.secretToken || "");
   const [copied, setCopied] = useState(false);
   const [subscriberEmail, setSubscriberEmail] = useState("");
   const [subscribeStatus, setSubscribeStatus] = useState<string | null>(null);
   const [isSubmittingSubscriber, setIsSubmittingSubscriber] = useState(false);
+
+  // Email Invite Tab State
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"CONTRIBUTOR" | "REVIEWER_GUIDE" | "VIEWER">("CONTRIBUTOR");
+  const [allowGuest, setAllowGuest] = useState(true);
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<{ ok: boolean; message: string; inviteUrl?: string } | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [loadingInvites, setLoadingInvites] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // Collaborators tab state
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -53,7 +75,7 @@ export function SharePopover({
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [collaboratorStatus, setCollaboratorStatus] = useState<string | null>(null);
 
-  // Generate 256-bit cryptographically secure token (64 hex characters)
+  // Generate 256-bit cryptographically secure token
   const generate256BitToken = (): string => {
     if (typeof window !== "undefined" && window.crypto && window.crypto.getRandomValues) {
       const array = new Uint8Array(32);
@@ -66,6 +88,24 @@ export function SharePopover({
   const getPublicUrl = () => {
     const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://note.esam.com.ng";
     return `${origin}/shared/${secretToken}`;
+  };
+
+  // Fetch pending invites for this document
+  const fetchInvites = async () => {
+    setLoadingInvites(true);
+    try {
+      const res = await fetch(`/api/invite?pageId=${page.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.invites) {
+          setPendingInvites(data.invites);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load invitations:", err);
+    } finally {
+      setLoadingInvites(false);
+    }
   };
 
   // Load workspace staff
@@ -87,7 +127,82 @@ export function SharePopover({
       }
     }
     loadStaff();
-  }, [workspaceId]);
+    fetchInvites();
+  }, [workspaceId, page.id]);
+
+  // Handle Send Email Invite
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail || !inviteEmail.includes("@")) return;
+
+    setSendingInvite(true);
+    setInviteStatus(null);
+
+    try {
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageId: page.id,
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          allowGuest,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        const emailSent = data.invite?.emailSent;
+        const msg = emailSent
+          ? `Invitation email dispatched to ${inviteEmail}.`
+          : `Invitation generated! Copy direct link below (SMTP unconfigured).`;
+
+        setInviteStatus({
+          ok: true,
+          message: msg,
+          inviteUrl: data.invite?.inviteUrl,
+        });
+
+        setInviteEmail("");
+        fetchInvites();
+      } else {
+        setInviteStatus({
+          ok: false,
+          message: data.error || "Failed to create invitation.",
+        });
+      }
+    } catch (err: any) {
+      setInviteStatus({
+        ok: false,
+        message: err.message || "Failed to dispatch invitation request.",
+      });
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  // Revoke an invitation
+  const handleRevokeInvite = async (inviteId: string) => {
+    try {
+      const res = await fetch("/api/invite", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId }),
+      });
+      if (res.ok) {
+        setPendingInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
+      }
+    } catch (err) {
+      console.warn("Failed to revoke invite:", err);
+    }
+  };
+
+  const handleCopyInviteUrl = (url: string, token: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedToken(token);
+    setTimeout(() => setCopiedToken(null), 2500);
+  };
 
   // Toggle "Publish to Web"
   const handleTogglePublish = async () => {
@@ -189,45 +304,200 @@ export function SharePopover({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Two Structured Tabs */}
+        {/* Three Structured Tabs */}
         <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 px-5 pt-2">
           <button
+            onClick={() => setActiveTab("INVITE")}
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+              activeTab === "INVITE"
+                ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
+                : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5" />
+            <span>Invite via Email</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("COLLABORATORS")}
-            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === "COLLABORATORS"
                 ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
                 : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>Workspace Collaborators</span>
+            <span>Workspace Staff</span>
           </button>
 
           <button
             onClick={() => setActiveTab("PUBLIC")}
-            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === "PUBLIC"
                 ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
                 : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
             }`}
           >
             <Globe className="w-3.5 h-3.5" />
-            <span>Public / Secret Link</span>
+            <span>Public Link</span>
             {isPublished && (
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             )}
           </button>
         </div>
 
-        {/* Tab 1 Content: Workspace Collaborators */}
+        {/* Tab 1: Invite via Email */}
+        {activeTab === "INVITE" && (
+          <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              Send an email invitation. The recipient receives a cryptographic access link to collaborate as a guest or sign in.
+            </p>
+
+            {inviteStatus && (
+              <div
+                className={`p-3 rounded-lg text-xs space-y-1.5 animate-in fade-in border ${
+                  inviteStatus.ok
+                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                    : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800"
+                }`}
+              >
+                <p className="font-medium">{inviteStatus.message}</p>
+                {inviteStatus.inviteUrl && (
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <input
+                      type="text"
+                      readOnly
+                      value={inviteStatus.inviteUrl}
+                      className="flex-1 font-mono text-[10px] px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-700 text-zinc-800 dark:text-zinc-200 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyInviteUrl(inviteStatus.inviteUrl!, "new")}
+                      className="px-2 py-1 text-[10px] font-semibold bg-emerald-600 text-white rounded hover:bg-emerald-500 cursor-pointer"
+                    >
+                      {copiedToken === "new" ? "Copied" : "Copy Link"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Email Invite Form */}
+            <form onSubmit={handleSendInvite} className="space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <input
+                  type="email"
+                  required
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="collaborator@organization.com"
+                  className="flex-1 text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
+                />
+
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as any)}
+                  className="text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none"
+                >
+                  <option value="CONTRIBUTOR">Can edit</option>
+                  <option value="REVIEWER_GUIDE">Can comment</option>
+                  <option value="VIEWER">Can view</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowGuest}
+                    onChange={(e) => setAllowGuest(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-0"
+                  />
+                  <span>Allow instant guest entry without registration</span>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={sendingInvite || !inviteEmail}
+                  className="text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 disabled:opacity-40 hover:opacity-90 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  {sendingInvite ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>{sendingInvite ? "Sending..." : "Send Invite"}</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Pending Document Invites List */}
+            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                <span>Active Document Invitations</span>
+                {loadingInvites && <RefreshCw className="w-3 h-3 animate-spin" />}
+              </div>
+
+              {pendingInvites.length === 0 ? (
+                <div className="p-3 text-xs text-zinc-400 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  No pending email invitations for this document.
+                </div>
+              ) : (
+                <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg divide-y divide-zinc-100 dark:divide-zinc-800 overflow-hidden">
+                  {pendingInvites.map((inv) => (
+                    <div key={inv.id} className="p-2.5 flex items-center justify-between text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                      <div className="space-y-0.5 truncate max-w-[220px]">
+                        <p className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          {inv.email || "Direct Link Token"}
+                        </p>
+                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                          <span className="px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-medium">
+                            {inv.role === "CONTRIBUTOR" ? "Can edit" : inv.role === "REVIEWER_GUIDE" ? "Can comment" : "Can view"}
+                          </span>
+                          <span>•</span>
+                          <span>{inv.allowGuest ? "Guest entry" : "Sign in required"}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyInviteUrl(inv.inviteUrl, inv.token)}
+                          className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                          title="Copy Invitation Link"
+                        >
+                          {copiedToken === inv.token ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeInvite(inv.id)}
+                          className="p-1 rounded text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          title="Revoke Invitation"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Workspace Staff */}
         {activeTab === "COLLABORATORS" && (
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
             <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
               Grant permissions to existing workspace staff members to collaborate directly on this document.
             </p>
@@ -267,7 +537,7 @@ export function SharePopover({
                 type="button"
                 onClick={handleAddCollaborator}
                 disabled={!selectedStaffEmail}
-                className="text-xs font-semibold px-3 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 disabled:opacity-40 hover:opacity-90 flex items-center gap-1 shadow-xs"
+                className="text-xs font-semibold px-3 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 disabled:opacity-40 hover:opacity-90 flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>Add</span>
@@ -300,9 +570,9 @@ export function SharePopover({
           </div>
         )}
 
-        {/* Tab 2 Content: Public / Secret Link */}
+        {/* Tab 3: Public / Secret Link */}
         {activeTab === "PUBLIC" && (
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
             {/* Publish Toggle */}
             <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
               <div className="space-y-0.5">
@@ -348,7 +618,7 @@ export function SharePopover({
                   <button
                     type="button"
                     onClick={handleCopyLink}
-                    className="text-xs font-semibold px-3 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 flex items-center gap-1.5 shadow-xs shrink-0"
+                    className="text-xs font-semibold px-3 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
                   >
                     {copied ? (
                       <>
@@ -374,7 +644,7 @@ export function SharePopover({
                   <span>Reader Update Notifications</span>
                 </div>
                 <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  Enter an email address to register a subscriber for automated update notifications whenever this document is modified.
+                  Register a subscriber email for automated update notifications whenever this document is modified.
                 </p>
 
                 <form onSubmit={handleSubscribe} className="flex items-center gap-2">
@@ -389,7 +659,7 @@ export function SharePopover({
                   <button
                     type="submit"
                     disabled={isSubmittingSubscriber}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmittingSubscriber ? "Subscribing..." : "Subscribe"}
                   </button>
@@ -409,12 +679,12 @@ export function SharePopover({
         <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 flex items-center justify-between text-xs text-zinc-400">
           <span className="flex items-center gap-1 text-[11px]">
             <Lock className="w-3 h-3" />
-            <span>Zero external vendor telemetry</span>
+            <span>Cryptographically governed access</span>
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50"
+            className="text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50 cursor-pointer"
           >
             Done
           </button>
