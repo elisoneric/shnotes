@@ -15,6 +15,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userMemberships = await prisma.workspaceMember.findMany({
+      where: { userId: currentUser.id },
+      select: { workspaceId: true },
+    });
+    const workspaceIds = userMemberships.map((m) => m.workspaceId);
+
+    if (workspaceIds.length === 0) {
+      return NextResponse.json({ error: "User has no active workspace membership." }, { status: 403 });
+    }
+
     const body = await req.json();
     const { mutations = [], lastSyncedAt } = body;
     const appliedMutationIds: string[] = [];
@@ -120,12 +130,15 @@ export async function POST(req: Request) {
                 },
               });
             } else {
-              const workspace = await prisma.workspace.findFirst();
-              if (workspace) {
+              const targetWsId = payload.workspaceId && workspaceIds.includes(payload.workspaceId)
+                ? payload.workspaceId
+                : workspaceIds[0];
+
+              if (targetWsId) {
                 await prisma.page.create({
                   data: {
                     id: entityId,
-                    workspaceId: workspace.id,
+                    workspaceId: targetWsId,
                     title: payload.title || "Untitled Document",
                     content: payload.content || { blocks: [] },
                     isDiary: Boolean(payload.isDiary),
@@ -161,15 +174,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // Pull Phase: Fetch Server Deltas
     // Pull Phase: Fetch Server Deltas scoped to user's workspaces
     const sinceDate = lastSyncedAt ? new Date(lastSyncedAt) : new Date(0);
-
-    const userMemberships = await prisma.workspaceMember.findMany({
-      where: { userId: currentUser.id },
-      select: { workspaceId: true },
-    });
-    const workspaceIds = userMemberships.map((m) => m.workspaceId);
 
     const [workspaces, projects, tasks, taskComments, pages] = await Promise.all([
       prisma.workspace.findMany({

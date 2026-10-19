@@ -54,6 +54,7 @@ model Workspace {
   members     WorkspaceMember[]
   projects    Project[]
   pages       Page[]
+  invites     WorkspaceInvite[]
   version     Int               @default(1)
   deletedAt   DateTime?
   createdAt   DateTime          @default(now())
@@ -201,13 +202,34 @@ model Page {
   workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   parentId        String?
   parent          Page?       @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children        Page[]      @relation("PageTree")
+  children        Page[]            @relation("PageTree")
   tasks           Task[]
-  version         Int         @default(1)
+  invites         WorkspaceInvite[]
+  version         Int               @default(1)
   deletedAt       DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   @@index([workspaceId, isDiary, diaryDate])
   @@map("pages")
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(cuid())
+  email       String?
+  token       String        @unique
+  role        WorkspaceRole @default(CONTRIBUTOR)
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pageId      String?
+  page        Page?         @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  allowGuest  Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+
+  @@index([token])
+  @@index([workspaceId])
+  @@map("workspace_invites")
 }

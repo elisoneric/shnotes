@@ -55,21 +55,27 @@ export function Shell({ initialUser }: ShellProps = {}) {
   const [userName, setUserName] = useState(initialUser?.name || "Project Owner");
   const [userId, setUserId] = useState(initialUser?.id || "user_admin");
   const [workspaceName, setWorkspaceName] = useState("Enterprise Operations");
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
 
-  // Initialize and load local Dexie data
-  const refreshLocalData = async () => {
+  // Initialize and load local Dexie data scoped to active workspace
+  const refreshLocalData = async (targetWsId?: string) => {
     try {
-      const p = await localDb.projects.filter((x) => !x.deletedAt).toArray();
-      const docPages = await localDb.pages.filter((x) => !x.isDiary && !x.deletedAt).toArray();
+      const activeWsId = targetWsId || workspaceId;
+      const allProjects = await localDb.projects.filter((x) => !x.deletedAt).toArray();
+      const p = activeWsId ? allProjects.filter((x) => x.workspaceId === activeWsId) : allProjects;
+
+      const allPages = await localDb.pages.filter((x) => !x.isDiary && !x.deletedAt).toArray();
+      const docPages = activeWsId ? allPages.filter((x) => x.workspaceId === activeWsId) : allPages;
+
       setProjects(p);
       setPages(docPages);
 
-      if (p.length > 0 && !selectedProject) {
+      if (p.length > 0 && (!selectedProject || (activeWsId && selectedProject.workspaceId !== activeWsId))) {
         setSelectedProject(p[0]);
       }
       if (docPages.length > 0 && !selectedPageId) {
@@ -90,21 +96,42 @@ export function Shell({ initialUser }: ShellProps = {}) {
       const isDark = document.documentElement.classList.contains("dark") || true;
       setDarkMode(isDark);
       if (isDark) document.documentElement.classList.add("dark");
+
+      // Check URL query param ?page=...
+      const urlParams = new URLSearchParams(window.location.search);
+      const pageParam = urlParams.get("page");
+      if (pageParam) {
+        setSelectedPageId(pageParam);
+        setCurrentView("PAGE");
+      }
     }
 
-    const interval = setInterval(refreshLocalData, 3000);
+    const interval = setInterval(() => refreshLocalData(), 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((res) => res.json())
-      .then((data) => {
+      .then(async (data) => {
         if (data.authenticated) {
           if (data.user?.name) setUserName(data.user.name);
           if (data.user?.id) setUserId(data.user.id);
           if (data.user?.role) setCurrentRole(data.user.role);
-          if (data.workspace?.name) setWorkspaceName(data.workspace.name);
+          if (data.workspace) {
+            setWorkspaceName(data.workspace.name);
+            setWorkspaceId(data.workspace.id);
+
+            // Clean up stale Dexie data belonging to other foreign workspaces
+            try {
+              const wsId = data.workspace.id;
+              await localDb.projects.filter((p) => Boolean(p.workspaceId && p.workspaceId !== wsId)).delete();
+              await localDb.pages.filter((p) => Boolean(p.workspaceId && p.workspaceId !== wsId)).delete();
+              refreshLocalData(wsId);
+            } catch (err) {
+              console.warn("Cleanup error:", err);
+            }
+          }
         }
       })
       .catch((err) => console.warn("Failed to load user session:", err));
@@ -113,6 +140,11 @@ export function Shell({ initialUser }: ShellProps = {}) {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      await localDb.projects.clear();
+      await localDb.pages.clear();
+      await localDb.tasks.clear();
+      await localDb.taskComments.clear();
+      await localDb.syncMeta.clear();
     } catch (err) {
       console.warn("Logout error:", err);
     }
@@ -130,11 +162,12 @@ export function Shell({ initialUser }: ShellProps = {}) {
   };
 
   const handleCreatePage = async () => {
+    const activeWsId = workspaceId || projects[0]?.workspaceId || "default";
     const newId = `page_${Date.now()}`;
     const newPage: LocalPage = {
       id: newId,
       title: "Untitled Document",
-      workspaceId: projects[0]?.workspaceId || "default",
+      workspaceId: activeWsId,
       isDiary: false,
       content: {
         blocks: [
@@ -158,7 +191,7 @@ export function Shell({ initialUser }: ShellProps = {}) {
       entity: "page",
       entityId: newId,
       action: "UPSERT",
-      payload: { title: newPage.title, content: newPage.content },
+      payload: { title: newPage.title, content: newPage.content, workspaceId: activeWsId },
       createdAt: Date.now(),
       attempts: 0,
     });
