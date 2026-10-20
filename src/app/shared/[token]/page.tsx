@@ -32,7 +32,7 @@ export default async function SharedDocPage({ params }: SharedPageProps) {
           <div className="p-1 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 shrink-0">
             <Lock className="w-3.5 h-3.5" />
           </div>
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{page.workspace.name}</span>
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{page.workspace?.name || "ShNotes"}</span>
           <span className="text-zinc-300 dark:text-zinc-700 hidden sm:inline">•</span>
           <span className="text-zinc-500 hidden sm:inline">View Only</span>
         </div>

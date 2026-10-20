@@ -282,7 +282,7 @@ async function dispatchConsolidatedNotification(session: DocumentEditSession): P
   const subject = `Updates made to "${page.title}" by ${editorName}`;
   const htmlBody = renderCleanEmailTemplate({
     title: `Updates to "${page.title}"`,
-    badge: page.workspace.name,
+    badge: page.workspace?.name || "Workspace",
     headline: `Updates made to "${page.title}"`,
     bodyHtml: `<strong>${editorName}</strong> made revisions to the document <strong>"${page.title}"</strong>.`,
     details: [

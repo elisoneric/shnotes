@@ -84,4 +84,41 @@ export async function invalidateSession(): Promise<void> {
   }
 }
 
+export function getSessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60, // 30 days
+    path: "/",
+  };
+}
+
+export async function validateSessionToken(token: string) {
+  try {
+    if (!token) return null;
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const session = await prisma.authSession.findUnique({
+      where: { tokenHash },
+      include: {
+        user: {
+          include: {
+            memberships: {
+              include: { workspace: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session || session.expiresAt < new Date()) {
+      return null;
+    }
+
+    return session.user;
+  } catch {
+    return null;
+  }
+}
+
 export { COOKIE_NAME, SESSION_TTL_DAYS };

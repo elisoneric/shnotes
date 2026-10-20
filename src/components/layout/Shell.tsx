@@ -10,15 +10,19 @@ import { AiChatDrawer } from "@/components/ai/AiChatDrawer";
 import { IosInstallModal } from "@/components/pwa/IosInstallModal";
 import { RegisterSw } from "@/components/pwa/RegisterSw";
 import { UpdateNotifier } from "@/components/pwa/UpdateNotifier";
+import { SyncIndicator } from "@/components/layout/SyncIndicator";
 import { WorkspaceRole } from "@prisma/client";
 import { CreateProjectModal } from "@/components/projects/CreateProjectModal";
 import { ProjectSettingsModal } from "@/components/projects/ProjectSettingsModal";
 import { ProfileSettingsModal } from "@/components/settings/ProfileSettingsModal";
 import { WorkspaceDashboard } from "@/components/dashboard/WorkspaceDashboard";
 import { WorkspaceSettings } from "@/components/settings/WorkspaceSettings";
+import { WorkspaceDropdown } from "@/components/workspace/WorkspaceDropdown";
+import { CreateWorkspaceModal } from "@/components/workspace/CreateWorkspaceModal";
 import {
   FolderGit2,
   FileText,
+  Lock,
   Calendar,
   Sparkles,
   CheckCircle2,
@@ -79,6 +83,7 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -190,9 +195,27 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
   }, []);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then(async (data) => {
+    const bootstrapAuth = async () => {
+      try {
+        let res = await fetch("/api/auth/me");
+        let data = await res.json();
+
+        // If cookie is absent/expired, attempt native rehydration handshake
+        if (!data.authenticated && typeof window !== "undefined") {
+          const nativeToken = localStorage.getItem("shnotes_native_token");
+          if (nativeToken) {
+            const rehydrateRes = await fetch("/api/auth/rehydrate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sessionToken: nativeToken }),
+            });
+            const rehydrateData = await rehydrateRes.json();
+            if (rehydrateData.authenticated) {
+              data = rehydrateData;
+            }
+          }
+        }
+
         if (data.authenticated) {
           if (data.user?.name) setUserName(data.user.name);
           if (data.user?.email) setUserEmail(data.user.email);
@@ -212,8 +235,12 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
             }
           }
         }
-      })
-      .catch((err) => console.warn("Failed to load user session:", err));
+      } catch (err) {
+        console.warn("Failed to load user session:", err);
+      }
+    };
+
+    bootstrapAuth();
   }, []);
 
   const closeSidebarOnMobile = () => {
@@ -230,6 +257,9 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
 
   const handleLogout = async () => {
     try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("shnotes_native_token");
+      }
       await fetch("/api/auth/me", { method: "POST" });
     } finally {
       window.location.href = "/login";
@@ -311,8 +341,14 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
   };
 
   const activeWsId = workspaceIdRef.current || workspaceId;
-  const myPages = pages.filter((p) => (!activeWsId || p.workspaceId === activeWsId) && !sharedPageIds.includes(p.id));
-  const sharedPages = pages.filter((p) => sharedPageIds.includes(p.id) || (activeWsId ? p.workspaceId !== activeWsId : false));
+  const myPages = pages.filter((p) => {
+    if (sharedPageIds.includes(p.id)) return false;
+    if (activeWsId) {
+      return p.workspaceId === activeWsId && !p.isPrivate;
+    }
+    return !p.workspaceId || p.isPrivate;
+  });
+  const sharedPages = pages.filter((p) => sharedPageIds.includes(p.id) || (activeWsId ? p.workspaceId !== activeWsId && !p.isPrivate : false));
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased font-sans">
@@ -334,24 +370,27 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:hidden"
         }`}
       >
-        {/* Workspace Brand Header */}
-        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 flex items-center justify-center font-bold text-xs shrink-0">
-              {(workspaceName || "TB").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-none truncate">
-                {workspaceName}
-              </h1>
-              <span className="text-[10px] text-zinc-400 font-medium truncate block mt-0.5">
-                Workspace & Notes
-              </span>
-            </div>
+        {/* Workspace Brand Header & Interactive Dropdown */}
+        <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-1.5">
+          <div className="flex-1 min-w-0">
+            <WorkspaceDropdown
+              currentWorkspaceId={workspaceId}
+              currentWorkspaceName={workspaceName}
+              currentWorkspaceSlug={workspaceSlug}
+              onSelectWorkspace={(ws) => {
+                setWorkspaceId(ws.id);
+                setWorkspaceName(ws.name);
+                setWorkspaceSlug(ws.slug);
+                refreshLocalData(ws.id || undefined);
+              }}
+              onOpenCreateModal={() => setIsCreateWorkspaceOpen(true)}
+              onOpenSettings={() => setCurrentView("ADMIN")}
+            />
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 shrink-0 ml-1"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 lg:hidden cursor-pointer"
+            title="Close sidebar"
           >
             <PanelLeftClose className="w-4 h-4" />
           </button>
@@ -492,7 +531,11 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
                           : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
                       }`}
                     >
-                      <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      {p.isPrivate ? (
+                        <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      ) : (
+                        <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      )}
                       <span className="truncate">{p.title || "Untitled Document"}</span>
                     </button>
 
@@ -729,6 +772,9 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Minimalist Micro-Sync Status Badge */}
+            <SyncIndicator />
+
             {/* Indunix AI Copilot Launcher */}
             <button
               onClick={() => setAiDrawerOpen(true)}
@@ -845,6 +891,22 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
           onProjectCreated={handleProjectCreated}
         />
       )}
+
+      {/* Create Workspace Modal */}
+      <CreateWorkspaceModal
+        isOpen={isCreateWorkspaceOpen}
+        onClose={() => setIsCreateWorkspaceOpen(false)}
+        onWorkspaceCreated={(newWs) => {
+          setWorkspaceId(newWs.id);
+          setWorkspaceName(newWs.name);
+          setWorkspaceSlug(newWs.slug);
+          if (newWs.projects && newWs.projects.length > 0) {
+            setProjects(newWs.projects);
+            setSelectedProject(newWs.projects[0]);
+          }
+          refreshLocalData(newWs.id);
+        }}
+      />
 
       {/* Project Settings Modal */}
       {isProjectSettingsOpen && selectedProject && (

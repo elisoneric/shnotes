@@ -46,12 +46,15 @@ export async function POST(req: Request) {
             const currentTask = await prisma.task.findUnique({ where: { id: entityId } });
             if (currentTask) {
               const previousStage = currentTask.stage;
-              const newStage = payload.stage as TaskStage;
+              const newStage = payload.stage ? (payload.stage as TaskStage) : currentTask.stage;
+              const newStageId = payload.stageId !== undefined ? payload.stageId : currentTask.stageId;
 
               await prisma.task.update({
                 where: { id: entityId },
                 data: {
                   stage: newStage,
+                  stageId: newStageId,
+                  order: payload.order !== undefined ? payload.order : currentTask.order,
                   taReviewNotes: payload.taReviewNotes !== undefined ? payload.taReviewNotes : currentTask.taReviewNotes,
                   devRecommendation: payload.devRecommendation !== undefined ? payload.devRecommendation : currentTask.devRecommendation,
                   devConfirmedAt: payload.devConfirmedAt !== undefined ? (payload.devConfirmedAt ? new Date(payload.devConfirmedAt) : null) : currentTask.devConfirmedAt,
@@ -75,6 +78,25 @@ export async function POST(req: Request) {
                 });
               }
             }
+          } else if (action === "SIGNOFF_CHANGE") {
+            const { taskId, userId, cleared, notes } = payload;
+            await prisma.taskSignoff.upsert({
+              where: {
+                taskId_userId: { taskId: entityId, userId: userId || currentUser.id },
+              },
+              create: {
+                taskId: entityId,
+                userId: userId || currentUser.id,
+                cleared: Boolean(cleared),
+                notes: notes || null,
+                clearedAt: cleared ? new Date() : null,
+              },
+              update: {
+                cleared: Boolean(cleared),
+                notes: notes !== undefined ? notes : undefined,
+                clearedAt: cleared ? new Date() : null,
+              },
+            });
           } else if (action === "UPSERT") {
             const existing = await prisma.task.findUnique({ where: { id: entityId } });
             if (existing) {
@@ -84,6 +106,8 @@ export async function POST(req: Request) {
                   title: payload.title ?? existing.title,
                   description: payload.description !== undefined ? payload.description : existing.description,
                   priority: payload.priority ?? existing.priority,
+                  stage: payload.stage ?? existing.stage,
+                  stageId: payload.stageId !== undefined ? payload.stageId : existing.stageId,
                   dueDate: payload.dueDate ? new Date(payload.dueDate) : null,
                   assigneeId: payload.assigneeId !== undefined ? payload.assigneeId : existing.assigneeId,
                   approverId: payload.approverId !== undefined ? payload.approverId : existing.approverId,
@@ -107,6 +131,7 @@ export async function POST(req: Request) {
                     title: payload.title || "Untitled Task",
                     description: payload.description || null,
                     stage: payload.stage || TaskStage.PROPOSED,
+                    stageId: payload.stageId || null,
                     priority: payload.priority || "MEDIUM",
                     creatorId: currentUser.id,
                     assigneeId: payload.assigneeId || null,
@@ -246,25 +271,65 @@ export async function POST(req: Request) {
     // Flush any pending document sessions that have reached the quiet window
     processPendingDocumentNotifications().catch(() => {});
 
-    // Pull Phase: Fetch Server Deltas scoped to user's workspaces
+    // Pull Phase: Fetch Server Deltas scoped to user's workspaces and personal space
     const sinceDate = lastSyncedAt ? new Date(lastSyncedAt) : new Date(0);
 
-    const [workspaces, projects, tasks, taskComments, pages] = await Promise.all([
+    const projectWhere = {
+      OR: [
+        { workspaceId: { in: workspaceIds } },
+        { workspaceId: null, members: { some: { userId: currentUser.id } } },
+      ],
+      updatedAt: { gte: sinceDate },
+    };
+
+    const [workspaces, projects, projectStages, tasks, taskComments, pages] = await Promise.all([
       prisma.workspace.findMany({
         where: { id: { in: workspaceIds }, updatedAt: { gte: sinceDate } },
       }),
       prisma.project.findMany({
-        where: { workspaceId: { in: workspaceIds }, updatedAt: { gte: sinceDate } },
+        where: projectWhere,
+        include: { stages: true },
+      }),
+      prisma.projectStage.findMany({
+        where: {
+          project: {
+            OR: [
+              { workspaceId: { in: workspaceIds } },
+              { workspaceId: null, members: { some: { userId: currentUser.id } } },
+            ],
+          },
+        },
       }),
       prisma.task.findMany({
-        where: { project: { workspaceId: { in: workspaceIds } }, updatedAt: { gte: sinceDate } },
+        where: {
+          project: {
+            OR: [
+              { workspaceId: { in: workspaceIds } },
+              { workspaceId: null, members: { some: { userId: currentUser.id } } },
+            ],
+          },
+          updatedAt: { gte: sinceDate },
+        },
         include: {
           creator: { select: { id: true, name: true, role: true } },
           assignee: { select: { id: true, name: true, role: true } },
+          signoffs: {
+            include: { user: { select: { id: true, name: true } } },
+          },
         },
       }),
       prisma.taskComment.findMany({
-        where: { task: { project: { workspaceId: { in: workspaceIds } } }, createdAt: { gte: sinceDate } },
+        where: {
+          task: {
+            project: {
+              OR: [
+                { workspaceId: { in: workspaceIds } },
+                { workspaceId: null, members: { some: { userId: currentUser.id } } },
+              ],
+            },
+          },
+          createdAt: { gte: sinceDate },
+        },
         include: {
           user: { select: { id: true, name: true, role: true } },
         },
@@ -274,6 +339,7 @@ export async function POST(req: Request) {
           OR: [
             { workspaceId: { in: workspaceIds } },
             { id: { in: sharedPageIds } },
+            { workspaceId: null },
           ],
           updatedAt: { gte: sinceDate },
         },
@@ -284,6 +350,15 @@ export async function POST(req: Request) {
       ...t,
       creatorName: t.creator?.name || "System",
       assigneeName: t.assignee?.name || null,
+      signoffs: t.signoffs.map((s) => ({
+        id: s.id,
+        taskId: s.taskId,
+        userId: s.userId,
+        userName: s.user?.name || "Member",
+        cleared: s.cleared,
+        notes: s.notes,
+        clearedAt: s.clearedAt,
+      })),
     }));
 
     const formattedComments = taskComments.map((c) => ({
@@ -298,6 +373,7 @@ export async function POST(req: Request) {
       deltas: {
         workspaces,
         projects,
+        projectStages,
         tasks: formattedTasks,
         taskComments: formattedComments,
         pages,

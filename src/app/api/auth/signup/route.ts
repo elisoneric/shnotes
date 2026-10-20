@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { hashPassword, createSession, COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth";
+import { hashPassword, createSession, COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth";
 import { WorkspaceRole, TaskStage, TaskPriority } from "@prisma/client";
 import { ensureSeedData } from "@/lib/seed";
 import { sendWelcomeEmail } from "@/lib/email";
@@ -114,13 +114,7 @@ export async function POST(req: Request) {
     // Create session cookie
     const rawToken = await createSession(result.user.id, req.headers.get("user-agent") || undefined);
     const cookieStore = await cookies();
-    cookieStore.set(COOKIE_NAME, rawToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
-      path: "/",
-    });
+    cookieStore.set(COOKIE_NAME, rawToken, getSessionCookieOptions());
 
     // Dispatch welcome onboarding email
     sendWelcomeEmail({
@@ -143,6 +137,7 @@ export async function POST(req: Request) {
         name: result.workspace.name,
         slug: result.workspace.slug,
       },
+      sessionToken: rawToken,
     });
   } catch (err: any) {
     console.error("[Signup Error]:", err);

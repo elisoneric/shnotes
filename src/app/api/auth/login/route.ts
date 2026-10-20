@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { verifyPassword, createSession, COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth";
+import { verifyPassword, createSession, COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth";
 import { ensureSeedData } from "@/lib/seed";
 
 export const dynamic = "force-dynamic";
@@ -26,17 +26,12 @@ export async function POST(req: Request) {
     const rawToken = await createSession(user.id, req.headers.get("user-agent") || undefined);
 
     const cookieStore = await cookies();
-    cookieStore.set(COOKIE_NAME, rawToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
-      path: "/",
-    });
+    cookieStore.set(COOKIE_NAME, rawToken, getSessionCookieOptions());
 
     return NextResponse.json({
       ok: true,
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      sessionToken: rawToken,
     });
   } catch (err: any) {
     console.error("[Login Error]:", err);

@@ -10,30 +10,37 @@ generator client {
 
 enum WorkspaceRole {
   OWNER             // Final-say authority / Project Owner
-  HOO               // Head of Operations (Creates business requirements, signs off QA)
-  TECH_ASSISTANT    // Triage & requirement validation
+  PRODUCT_OWNER     // Scoped Product Owner
   DEVELOPER         // Writes technical recommendations & executes implementation
-  COLLABORATOR      // General member / observer
+  STAFF             // Core staff member / requester
+  VIEWER            // Read-only observer
   // Backward-compatibility aliases
+  HOO
+  TECH_ASSISTANT
+  COLLABORATOR
   REVIEWER_GUIDE
   CONTRIBUTOR
-  VIEWER
 }
 
 enum ProjectAccessLevel {
+  PRODUCT_OWNER
+  LEAD_DEV
+  REVIEWER_REQUESTER
+  VIEWER
+  // Backward-compatibility aliases
   LEAD
   CONTRIBUTOR
   OBSERVER
 }
 
 enum TaskStage {
-  PROPOSED              // Raised by HOO
+  PROPOSED              // Raised by requester / staff
   TA_REVIEW             // Triaged by Technical Assistant
   DEV_ASSESSMENT        // Awaiting Developer recommendation & architecture plan
   CONFIRMED_READY       // Scope approved and locked
   IN_PROGRESS           // Active development
   READY_FOR_TESTING     // Staging build ready with QA test notes
-  APPROVED_CLEARED      // HOO testing signed off
+  APPROVED_CLEARED      // Testing signed off / Cleared
   ARCHIVED              // Retained in historical archive
 }
 
@@ -82,6 +89,7 @@ model User {
   projectMemberships ProjectMember[]
   assignedTasks      Task[]             @relation("TaskAssignee")
   createdTasks       Task[]             @relation("TaskCreator")
+  signoffs           TaskSignoff[]
   comments           TaskComment[]
   sessions           AuthSession[]
   pageCollaborations PageCollaborator[]
@@ -127,19 +135,34 @@ model Project {
   key         String          // Ticket prefix e.g. EQ, HR
   description String?
   colorAccent String?         @default("#3b82f6") // Accent color
-  workspaceId String
-  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String?         // Nullable for personal standalone projects
+  workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   ownerName   String?         // Final Say Authority / Project Owner
   guideName   String?         // Project Guide / Reviewer
+  stages      ProjectStage[]  // Dynamic customizable columns
   members     ProjectMember[]
   tasks       Task[]
+  pages       Page[]          // Notes scoped to this specific project
   version     Int             @default(1)
   deletedAt   DateTime?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  @@unique([workspaceId, key])
   @@map("projects")
+}
+
+model ProjectStage {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String   // e.g. "Requests", "In Review", "In Dev", "Cleared"
+  color       String   @default("#94a3b8")
+  order       Float    @default(0.0)
+  isCompleted Boolean  @default(false)
+  tasks       Task[]
+
+  @@index([projectId, order])
+  @@map("project_stages")
 }
 
 model ProjectMember {
@@ -148,7 +171,7 @@ model ProjectMember {
   project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId      String
   user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessLevel ProjectAccessLevel @default(CONTRIBUTOR)
+  accessLevel ProjectAccessLevel @default(REVIEWER_REQUESTER)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
@@ -158,47 +181,65 @@ model ProjectMember {
 }
 
 model Task {
-  id                  String       @id @default(cuid())
-  projectTaskId       String       // Human identifier such as EQ-101
+  id                  String        @id @default(cuid())
+  projectTaskId       String        // Human identifier such as EQ-101
   title               String
-  description         String?      @db.Text // Objective, business case, and requirements
-  stage               TaskStage    @default(PROPOSED)
-  priority            TaskPriority @default(MEDIUM)
+  description         String?       @db.Text // Objective, business case, and requirements
+  stage               TaskStage     @default(PROPOSED)
+  stageId             String?
+  projectStage        ProjectStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  priority            TaskPriority  @default(MEDIUM)
   dueDate             DateTime?
 
   // Universal Enterprise Governance Fields
-  taReviewNotes       String?      @db.Text // Reviewer / Guide remarks
-  devRecommendation   String?      @db.Text // Execution methodology & technical spec
-  devConfirmedAt      DateTime?             // Scope lock timestamp
-  qaTestNotes         String?      @db.Text // Deliverables, verification & testing criteria
-  approvalSignoffNote String?      @db.Text // Final sign-off verification & acceptance notes
-  signoffByName       String?               // Authority who signed off
+  taReviewNotes       String?       @db.Text // Reviewer / Guide remarks
+  devRecommendation   String?       @db.Text // Execution methodology & technical spec
+  devConfirmedAt      DateTime?              // Scope lock timestamp
+  qaTestNotes         String?       @db.Text // Deliverables, verification & testing criteria
+  approvalSignoffNote String?       @db.Text // Final sign-off verification & acceptance notes
+  signoffByName       String?                // Authority who signed off
 
   // Actors
   creatorId           String
-  creator             User         @relation("TaskCreator", fields: [creatorId], references: [id])
+  creator             User          @relation("TaskCreator", fields: [creatorId], references: [id])
   assigneeId          String?
-  assignee            User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  approverId          String?               // Designated final say authority for this task
+  assignee            User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  approverId          String?                // Designated final say authority for this task
 
   projectId           String
-  project             Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project             Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   // Relationships
   linkedPageId        String?
-  linkedPage          Page?        @relation(fields: [linkedPageId], references: [id], onDelete: SetNull)
+  linkedPage          Page?         @relation(fields: [linkedPageId], references: [id], onDelete: SetNull)
+  signoffs            TaskSignoff[]
   comments            TaskComment[]
   
-  order               Float        @default(0.0)
-  isArchived          Boolean      @default(false)
-  version             Int          @default(1)
+  order               Float         @default(0.0)
+  isArchived          Boolean       @default(false)
+  version             Int           @default(1)
   deletedAt           DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   @@unique([projectId, projectTaskId])
   @@index([projectId, stage, isArchived])
+  @@index([projectId, stageId])
   @@map("tasks")
+}
+
+model TaskSignoff {
+  id        String    @id @default(cuid())
+  taskId    String
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cleared   Boolean   @default(false)
+  notes     String?   @db.Text
+  clearedAt DateTime?
+
+  @@unique([taskId, userId])
+  @@map("task_signoffs")
 }
 
 model TaskComment {
@@ -224,12 +265,15 @@ model Page {
   content         Json?
   isDiary         Boolean            @default(false)
   diaryDate       DateTime?
+  isPrivate       Boolean            @default(false) // Private dev scratchpad notes
   layout          String?            @default("centered") // "centered" (768px) vs "full"
   fontFamily      String?            @default("sans")     // "sans" | "serif" | "mono"
   fontSize        String?            @default("normal")   // "small" | "normal"
   secretToken     String?            @unique
-  workspaceId     String
-  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId     String?            // Nullable for personal space standalone notes
+  workspace       Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId       String?            // Notes scoped to specific project
+  project         Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   parentId        String?
   parent          Page?              @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
   children        Page[]             @relation("PageTree")
@@ -243,6 +287,7 @@ model Page {
   updatedAt       DateTime           @updatedAt
 
   @@index([workspaceId, isDiary, diaryDate])
+  @@index([projectId])
   @@map("pages")
 }
 

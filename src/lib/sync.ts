@@ -60,9 +60,9 @@ class SyncManager {
   }
 
   public async queueMutation(
-    entity: "task" | "page" | "taskComment" | "project",
+    entity: "task" | "page" | "taskComment" | "project" | "projectStage",
     entityId: string,
-    action: "UPSERT" | "DELETE" | "STAGE_CHANGE",
+    action: "UPSERT" | "DELETE" | "STAGE_CHANGE" | "SIGNOFF_CHANGE",
     payload: any
   ) {
     const item: MutationItem = {
@@ -134,6 +134,9 @@ class SyncManager {
         }
         if (Array.isArray(deltas.projects)) {
           await localDb.projects.bulkPut(deltas.projects);
+        }
+        if (Array.isArray(deltas.projectStages)) {
+          await localDb.projectStages.bulkPut(deltas.projectStages);
         }
         if (Array.isArray(deltas.tasks)) {
           await localDb.tasks.bulkPut(deltas.tasks);

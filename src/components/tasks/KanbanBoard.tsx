@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
-import { localDb, LocalTask, LocalTaskComment, LocalProject } from "@/lib/dexie";
+import React, { useState, useEffect } from "react";
+import { localDb, LocalTask, LocalTaskComment, LocalProject, LocalProjectStage } from "@/lib/dexie";
 import { TaskStage, TaskPriority, WorkspaceRole, CommentType } from "@prisma/client";
 import { KanbanCard } from "@/components/tasks/KanbanCard";
 import { TaskGovernanceModal } from "@/components/tasks/TaskGovernanceModal";
@@ -9,13 +9,10 @@ import { syncManager } from "@/lib/sync";
 import {
   Plus,
   Search,
-  Filter,
   CheckCircle2,
-  Clock,
-  Layers,
-  ArrowRight,
   AlertCircle,
   X,
+  Layers,
 } from "lucide-react";
 
 interface KanbanBoardProps {
@@ -25,55 +22,47 @@ interface KanbanBoardProps {
   currentUserName: string;
 }
 
-export const GOVERNED_STAGES: {
-  stage: TaskStage;
-  label: string;
-  accent: string;
-  allowedRoles: WorkspaceRole[];
+export const DEFAULT_PROJECT_STAGES: {
+  name: string;
+  color: string;
+  order: number;
+  isCompleted: boolean;
 }[] = [
-  {
-    stage: "PROPOSED",
-    label: "Proposed",
-    accent: "border-zinc-300 dark:border-zinc-700",
-    allowedRoles: ["OWNER", "HOO"],
-  },
-  {
-    stage: "TA_REVIEW",
-    label: "TA Review",
-    accent: "border-amber-400 dark:border-amber-600",
-    allowedRoles: ["OWNER", "TECH_ASSISTANT", "HOO"],
-  },
-  {
-    stage: "DEV_ASSESSMENT",
-    label: "Dev Assessment",
-    accent: "border-purple-400 dark:border-purple-600",
-    allowedRoles: ["OWNER", "DEVELOPER", "TECH_ASSISTANT"],
-  },
-  {
-    stage: "CONFIRMED_READY",
-    label: "Confirmed Ready",
-    accent: "border-blue-400 dark:border-blue-600",
-    allowedRoles: ["OWNER", "HOO"],
-  },
-  {
-    stage: "IN_PROGRESS",
-    label: "In Progress",
-    accent: "border-indigo-400 dark:border-indigo-600",
-    allowedRoles: ["OWNER", "DEVELOPER"],
-  },
-  {
-    stage: "READY_FOR_TESTING",
-    label: "Ready for Testing",
-    accent: "border-emerald-400 dark:border-emerald-600",
-    allowedRoles: ["OWNER", "DEVELOPER"],
-  },
-  {
-    stage: "APPROVED_CLEARED",
-    label: "Approved & Cleared",
-    accent: "border-teal-400 dark:border-teal-600",
-    allowedRoles: ["OWNER", "HOO"],
-  },
+  { name: "Backlog / Requests", color: "#94a3b8", order: 1, isCompleted: false },
+  { name: "In Review & Spec", color: "#a855f7", order: 2, isCompleted: false },
+  { name: "In Progress", color: "#3b82f6", order: 3, isCompleted: false },
+  { name: "Ready for QA & Sign-Off", color: "#10b981", order: 4, isCompleted: true },
 ];
+
+function mapStageToLegacyEnum(stageOrder: number, isCompleted: boolean): TaskStage {
+  if (isCompleted) return "APPROVED_CLEARED";
+  if (stageOrder <= 1) return "PROPOSED";
+  if (stageOrder === 2) return "DEV_ASSESSMENT";
+  if (stageOrder === 3) return "IN_PROGRESS";
+  return "READY_FOR_TESTING";
+}
+
+function taskMatchesStage(task: LocalTask, stage: LocalProjectStage, allStages: LocalProjectStage[]): boolean {
+  if (task.stageId) {
+    return task.stageId === stage.id;
+  }
+
+  // Fallback mapping for existing tasks that don't have stageId set yet
+  if (stage.order === 1) {
+    return task.stage === "PROPOSED" || task.stage === "TA_REVIEW";
+  }
+  if (stage.order === 2) {
+    return task.stage === "DEV_ASSESSMENT" || task.stage === "CONFIRMED_READY";
+  }
+  if (stage.order === 3) {
+    return task.stage === "IN_PROGRESS";
+  }
+  if (stage.isCompleted || stage.order >= 4) {
+    return task.stage === "READY_FOR_TESTING" || task.stage === "APPROVED_CLEARED" || task.stage === "ARCHIVED";
+  }
+
+  return false;
+}
 
 export function KanbanBoard({
   currentProject,
@@ -82,6 +71,7 @@ export function KanbanBoard({
   currentUserName,
 }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<LocalTask[]>([]);
+  const [stages, setStages] = useState<LocalProjectStage[]>([]);
   const [comments, setComments] = useState<LocalTaskComment[]>([]);
   const [selectedTask, setSelectedTask] = useState<LocalTask | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -91,33 +81,81 @@ export function KanbanBoard({
 
   // Drag and Drop state
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
-  const [dragOverStage, setDragOverStage] = useState<TaskStage | null>(null);
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
 
   // New task modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [createStage, setCreateStage] = useState<TaskStage>("PROPOSED");
+  const [createStageId, setCreateStageId] = useState<string>("");
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newPriority, setNewPriority] = useState<TaskPriority>("MEDIUM");
 
   const loadData = async () => {
     try {
+      // 1. Load or initialize project stages
+      let projectStages: LocalProjectStage[] = [];
+      if (currentProject) {
+        projectStages = await localDb.projectStages
+          .where("projectId")
+          .equals(currentProject.id)
+          .sortBy("order");
+
+        if (projectStages.length === 0) {
+          // Seed the 4 standard stages for this project
+          const defaultStages: LocalProjectStage[] = DEFAULT_PROJECT_STAGES.map((s) => ({
+            id: `stage_${currentProject.id}_${s.order}`,
+            projectId: currentProject.id,
+            name: s.name,
+            color: s.color,
+            order: s.order,
+            isCompleted: s.isCompleted,
+          }));
+
+          await localDb.projectStages.bulkPut(defaultStages);
+          projectStages = defaultStages;
+
+          for (const stg of defaultStages) {
+            await syncManager.queueMutation("projectStage", stg.id, "UPSERT", {
+              projectId: stg.projectId,
+              name: stg.name,
+              color: stg.color,
+              order: stg.order,
+              isCompleted: stg.isCompleted,
+            });
+          }
+        }
+      } else {
+        // Fallback stages for personal space
+        projectStages = DEFAULT_PROJECT_STAGES.map((s) => ({
+          id: `stage_personal_${s.order}`,
+          projectId: "personal",
+          name: s.name,
+          color: s.color,
+          order: s.order,
+          isCompleted: s.isCompleted,
+        }));
+      }
+
+      setStages(projectStages);
+
+      // 2. Load tasks
       let query = localDb.tasks.filter((t) => !t.deletedAt);
       if (currentProject) {
         query = query.filter((t) => t.projectId === currentProject.id);
       }
       const loadedTasks = await query.toArray();
       const loadedComments = await localDb.taskComments.toArray();
+
       setTasks(loadedTasks);
       setComments(loadedComments);
     } catch (err) {
-      console.warn("Failed to load local tasks:", err);
+      console.warn("Failed to load local tasks or stages:", err);
     }
   };
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 2000);
+    const interval = setInterval(loadData, 2500);
     return () => clearInterval(interval);
   }, [currentProject]);
 
@@ -126,64 +164,22 @@ export function KanbanBoard({
     setTimeout(() => setToastError(null), 4000);
   };
 
-  // Guard stage transitions by role permissions
-  const validateStagePermission = (targetStage: TaskStage, currentTaskStage: TaskStage): boolean => {
-    if (currentRole === "OWNER") return true;
-
-    // HOO permissions:
-    // Can move PROPOSED -> TA_REVIEW
-    // Can move CONFIRMED_READY (approves scope)
-    // Can move READY_FOR_TESTING -> APPROVED_CLEARED (signs off QA)
-    if (currentRole === "HOO") {
-      if (currentTaskStage === "PROPOSED" && targetStage === "TA_REVIEW") return true;
-      if (targetStage === "CONFIRMED_READY") return true;
-      if (currentTaskStage === "READY_FOR_TESTING" && targetStage === "APPROVED_CLEARED") return true;
-      if (targetStage === "ARCHIVED") return true;
-      return false;
-    }
-
-    // Developer permissions:
-    // Can move CONFIRMED_READY -> IN_PROGRESS
-    // Can move IN_PROGRESS -> READY_FOR_TESTING
-    if (currentRole === "DEVELOPER") {
-      if (currentTaskStage === "CONFIRMED_READY" && targetStage === "IN_PROGRESS") return true;
-      if (currentTaskStage === "IN_PROGRESS" && targetStage === "READY_FOR_TESTING") return true;
-      if (currentTaskStage === "DEV_ASSESSMENT" && targetStage === "CONFIRMED_READY") return false; // Needs approval
-      return false;
-    }
-
-    // Technical Assistant permissions:
-    // Can triage TA_REVIEW -> DEV_ASSESSMENT
-    if (currentRole === "TECH_ASSISTANT") {
-      if (currentTaskStage === "PROPOSED" || currentTaskStage === "TA_REVIEW") {
-        if (targetStage === "TA_REVIEW" || targetStage === "DEV_ASSESSMENT") return true;
-      }
-      return false;
-    }
-
-    return false;
-  };
-
   // Perform optimistic stage update with audit log insertion
-  const handleStageTransition = async (taskId: string, newStage: TaskStage, customOrder?: number) => {
+  const handleStageTransition = async (taskId: string, targetStage: LocalProjectStage, customOrder?: number) => {
     const existing = tasks.find((t) => t.id === taskId);
     if (!existing) return;
 
-    if (existing.stage === newStage && customOrder === undefined) return;
+    if (existing.stageId === targetStage.id && customOrder === undefined) return;
 
-    // Check permissions
-    if (existing.stage !== newStage && !validateStagePermission(newStage, existing.stage)) {
-      showToast(`Permission denied: Your role (${currentRole.replace(/_/g, " ")}) cannot transition task to ${newStage.replace(/_/g, " ")}.`);
-      return;
-    }
-
-    const previousStage = existing.stage;
+    const previousStageName = stages.find((s) => s.id === existing.stageId)?.name || existing.stage.replace(/_/g, " ");
     const finalOrder = customOrder !== undefined ? customOrder : existing.order;
+    const legacyStage = mapStageToLegacyEnum(targetStage.order, targetStage.isCompleted);
 
     // 1. Optimistic update
     const updatedTask: LocalTask = {
       ...existing,
-      stage: newStage,
+      stageId: targetStage.id,
+      stage: legacyStage,
       order: finalOrder,
       updatedAt: new Date(),
       version: existing.version + 1,
@@ -195,7 +191,7 @@ export function KanbanBoard({
       await localDb.tasks.put(updatedTask);
 
       // 2. Insert automated STAGE_CHANGE_AUDIT comment
-      if (previousStage !== newStage) {
+      if (previousStageName !== targetStage.name) {
         const auditComment: LocalTaskComment = {
           id: `comment_audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           taskId,
@@ -203,7 +199,7 @@ export function KanbanBoard({
           userName: currentUserName,
           userRole: currentRole,
           type: CommentType.STAGE_CHANGE_AUDIT,
-          content: `Stage updated from ${previousStage.replace(/_/g, " ")} to ${newStage.replace(/_/g, " ")} by ${currentUserName} (${currentRole.replace(/_/g, " ")}).`,
+          content: `Stage transitioned from ${previousStageName} to ${targetStage.name} by ${currentUserName} (${currentRole.replace(/_/g, " ")}).`,
           version: 1,
           createdAt: new Date(),
         };
@@ -219,11 +215,11 @@ export function KanbanBoard({
 
       // 3. Queue server sync
       await syncManager.queueMutation("task", taskId, "STAGE_CHANGE", {
-        stage: newStage,
+        stageId: targetStage.id,
+        stage: legacyStage,
         order: finalOrder,
       });
     } catch (err: any) {
-      // Rollback on failure
       setTasks((prev) => prev.map((t) => (t.id === taskId ? existing : t)));
       showToast(`Failed to update task stage: ${err?.message || "Storage error"}`);
     }
@@ -235,24 +231,24 @@ export function KanbanBoard({
     setDraggingTaskId(taskId);
   };
 
-  const handleDragOver = (e: React.DragEvent, stage: TaskStage) => {
+  const handleDragOver = (e: React.DragEvent, stageId: string) => {
     e.preventDefault();
-    if (dragOverStage !== stage) {
-      setDragOverStage(stage);
+    if (dragOverStageId !== stageId) {
+      setDragOverStageId(stageId);
     }
   };
 
-  const handleDrop = async (e: React.DragEvent, targetStage: TaskStage) => {
+  const handleDrop = async (e: React.DragEvent, targetStage: LocalProjectStage) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain") || draggingTaskId;
     setDraggingTaskId(null);
-    setDragOverStage(null);
+    setDragOverStageId(null);
 
     if (!taskId) return;
 
     // Calculate fractional order in destination column
     const columnTasks = tasks
-      .filter((t) => t.stage === targetStage && t.id !== taskId)
+      .filter((t) => taskMatchesStage(t, targetStage, stages) && t.id !== taskId)
       .sort((a, b) => a.order - b.order);
 
     let newOrder = 1.0;
@@ -272,12 +268,17 @@ export function KanbanBoard({
     const humanId = `${currentProject.key}-${count + 101}`;
     const newId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+    const chosenStage = stages.find((s) => s.id === createStageId) || stages[0];
+    const initialStageId = chosenStage?.id;
+    const legacyStage = chosenStage ? mapStageToLegacyEnum(chosenStage.order, chosenStage.isCompleted) : TaskStage.PROPOSED;
+
     const taskItem: LocalTask = {
       id: newId,
       projectTaskId: humanId,
       title: newTitle.trim(),
       description: newDesc.trim() || null,
-      stage: createStage,
+      stage: legacyStage,
+      stageId: initialStageId,
       priority: newPriority,
       creatorId: currentUserId,
       creatorName: currentUserName,
@@ -298,6 +299,7 @@ export function KanbanBoard({
       description: taskItem.description,
       priority: taskItem.priority,
       stage: taskItem.stage,
+      stageId: taskItem.stageId,
       order: taskItem.order,
     });
 
@@ -320,16 +322,19 @@ export function KanbanBoard({
       return false;
     }
 
-    if (activeStageFilter !== "ALL" && task.stage !== activeStageFilter) {
-      return false;
+    if (activeStageFilter !== "ALL") {
+      const targetStage = stages.find((s) => s.id === activeStageFilter);
+      if (targetStage && !taskMatchesStage(task, targetStage, stages)) {
+        return false;
+      }
     }
 
     return true;
   });
 
   const columnsToRender = activeStageFilter === "ALL"
-    ? GOVERNED_STAGES
-    : GOVERNED_STAGES.filter((s) => s.stage === activeStageFilter);
+    ? stages
+    : stages.filter((s) => s.id === activeStageFilter);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/50">
@@ -364,6 +369,7 @@ export function KanbanBoard({
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
+              aria-label="Search tickets"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="text-xs pl-8 pr-3 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 w-32 sm:w-44"
@@ -372,6 +378,7 @@ export function KanbanBoard({
 
           {/* Priority Filter */}
           <select
+            aria-label="Filter by priority"
             value={selectedPriority}
             onChange={(e) => setSelectedPriority(e.target.value)}
             className="text-xs px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 focus:outline-none"
@@ -386,7 +393,7 @@ export function KanbanBoard({
           {/* New Task Button */}
           <button
             onClick={() => {
-              setCreateStage("PROPOSED");
+              setCreateStageId(stages[0]?.id || "");
               setIsCreateOpen(true);
             }}
             className="text-xs font-semibold px-3 py-1 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 flex items-center gap-1 shadow-xs"
@@ -397,7 +404,7 @@ export function KanbanBoard({
         </div>
       </div>
 
-      {/* Stage Quick Switcher Pills (Mobile Friendly) */}
+      {/* Dynamic Stage Quick Switcher Pills */}
       <div className="px-4 sm:px-6 py-2 border-b border-zinc-200/60 dark:border-zinc-800/60 bg-white/50 dark:bg-zinc-900/50 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
         <button
           onClick={() => setActiveStageFilter("ALL")}
@@ -409,39 +416,43 @@ export function KanbanBoard({
         >
           All Stages ({tasks.length})
         </button>
-        {GOVERNED_STAGES.map((col) => {
-          const count = tasks.filter((t) => t.stage === col.stage).length;
+        {stages.map((stage) => {
+          const count = tasks.filter((t) => taskMatchesStage(t, stage, stages)).length;
           return (
             <button
-              key={col.stage}
-              onClick={() => setActiveStageFilter(col.stage)}
-              className={`text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap font-medium transition-colors flex items-center gap-1 ${
-                activeStageFilter === col.stage
+              key={stage.id}
+              onClick={() => setActiveStageFilter(stage.id)}
+              className={`text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap font-medium transition-colors flex items-center gap-1.5 ${
+                activeStageFilter === stage.id
                   ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold"
                   : "bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800"
               }`}
             >
-              <span>{col.label}</span>
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: stage.color }}
+              />
+              <span>{stage.name}</span>
               <span className="opacity-70 text-[10px]">({count})</span>
             </button>
           );
         })}
       </div>
 
-      {/* Columns Container: Information-Dense, Smooth Horizontal Scroll */}
+      {/* Dynamic Columns Container */}
       <div className="flex-1 overflow-x-auto p-4 sm:p-6 flex items-start gap-3.5">
-        {columnsToRender.map((col) => {
+        {columnsToRender.map((stage) => {
           const colTasks = filteredTasks
-            .filter((t) => t.stage === col.stage)
+            .filter((t) => taskMatchesStage(t, stage, stages))
             .sort((a, b) => a.order - b.order);
 
-          const isOver = dragOverStage === col.stage;
+          const isOver = dragOverStageId === stage.id;
 
           return (
             <div
-              key={col.stage}
-              onDragOver={(e) => handleDragOver(e, col.stage)}
-              onDrop={(e) => handleDrop(e, col.stage)}
+              key={stage.id}
+              onDragOver={(e) => handleDragOver(e, stage.id)}
+              onDrop={(e) => handleDrop(e, stage)}
               className={`w-72 sm:w-80 shrink-0 flex flex-col max-h-full rounded-xl border bg-zinc-100/70 dark:bg-zinc-900/50 backdrop-blur-xs transition-all ${
                 isOver
                   ? "border-blue-500 bg-blue-50/20 dark:bg-blue-950/20 shadow-md ring-1 ring-blue-400/30"
@@ -450,10 +461,13 @@ export function KanbanBoard({
             >
               {/* Column Header */}
               <div className="px-3.5 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full border-2 ${col.accent}`} />
-                  <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-tight">
-                    {col.label}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: stage.color }}
+                  />
+                  <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tracking-tight truncate">
+                    {stage.name}
                   </h3>
                   <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
                     {colTasks.length}
@@ -462,10 +476,10 @@ export function KanbanBoard({
 
                 <button
                   onClick={() => {
-                    setCreateStage(col.stage);
+                    setCreateStageId(stage.id);
                     setIsCreateOpen(true);
                   }}
-                  title={`Add task to ${col.label}`}
+                  title={`Add task to ${stage.name}`}
                   className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -486,13 +500,14 @@ export function KanbanBoard({
                       <KanbanCard
                         key={task.id}
                         task={task}
+                        stageName={stage.name}
+                        stageColor={stage.color}
                         commentCount={taskComments.length}
                         userRole={currentRole}
                         isDragging={draggingTaskId === task.id}
                         onDragStart={(e) => handleDragStart(e, task.id)}
                         onDragEnd={() => setDraggingTaskId(null)}
                         onClick={() => setSelectedTask(task)}
-                        onStageChange={(tId, nextStage) => handleStageTransition(tId, nextStage)}
                       />
                     );
                   })
@@ -507,6 +522,7 @@ export function KanbanBoard({
       {selectedTask && (
         <TaskGovernanceModal
           task={selectedTask}
+          stages={stages}
           comments={comments.filter((c) => c.taskId === selectedTask.id)}
           currentRole={currentRole}
           currentUserId={currentUserId}
@@ -525,7 +541,7 @@ export function KanbanBoard({
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
               <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                New Task ({createStage.replace(/_/g, " ")})
+                New Task Ticket
               </h3>
               <button
                 onClick={() => setIsCreateOpen(false)}
@@ -583,13 +599,13 @@ export function KanbanBoard({
                     Initial Stage
                   </label>
                   <select
-                    value={createStage}
-                    onChange={(e) => setCreateStage(e.target.value as TaskStage)}
+                    value={createStageId}
+                    onChange={(e) => setCreateStageId(e.target.value)}
                     className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none"
                   >
-                    {GOVERNED_STAGES.map((s) => (
-                      <option key={s.stage} value={s.stage}>
-                        {s.label}
+                    {stages.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
                       </option>
                     ))}
                   </select>

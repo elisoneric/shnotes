@@ -34,6 +34,10 @@ export default function SignupPage() {
         throw new Error(data.error || "Failed to create account.");
       }
 
+      if (data.sessionToken && typeof window !== "undefined") {
+        localStorage.setItem("shnotes_native_token", data.sessionToken);
+      }
+
       router.push("/app");
       router.refresh();
     } catch (err: any) {

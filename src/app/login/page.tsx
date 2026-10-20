@@ -29,6 +29,10 @@ export default function LoginPage() {
         throw new Error(data.error || "Invalid credentials.");
       }
 
+      if (data.sessionToken && typeof window !== "undefined") {
+        localStorage.setItem("shnotes_native_token", data.sessionToken);
+      }
+
       router.push("/app");
       router.refresh();
     } catch (err: any) {

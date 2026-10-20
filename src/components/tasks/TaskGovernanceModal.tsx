@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { LocalTask, LocalTaskComment, localDb } from "@/lib/dexie";
+import { LocalTask, LocalTaskComment, LocalProjectStage, LocalTaskSignoff, localDb } from "@/lib/dexie";
 import { TaskStage, TaskPriority, WorkspaceRole, CommentType } from "@prisma/client";
 import { syncManager } from "@/lib/sync";
 import {
@@ -14,11 +14,14 @@ import {
   Calendar,
   AlertCircle,
   MessageSquare,
-  Sparkles,
+  ShieldCheck,
+  Check,
+  UserCheck,
 } from "lucide-react";
 
 interface TaskGovernanceModalProps {
   task: LocalTask;
+  stages?: LocalProjectStage[];
   comments: LocalTaskComment[];
   currentRole: WorkspaceRole;
   currentUserId: string;
@@ -27,8 +30,16 @@ interface TaskGovernanceModalProps {
   onTaskUpdated: () => void;
 }
 
+const GOVERNANCE_ROLES: { role: WorkspaceRole; title: string; desc: string }[] = [
+  { role: "TECH_ASSISTANT", title: "Technical Assistant", desc: "Triage & Spec Verification" },
+  { role: "DEVELOPER", title: "Engineering Lead", desc: "Build & Implementation Verification" },
+  { role: "HOO", title: "Head of Operations", desc: "Scope & Resource Clearance" },
+  { role: "OWNER", title: "Executive Sign-Off", desc: "Final Release Authorization" },
+];
+
 export function TaskGovernanceModal({
   task,
+  stages = [],
   comments,
   currentRole,
   currentUserId,
@@ -39,21 +50,18 @@ export function TaskGovernanceModal({
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || "");
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
+  const [selectedStageId, setSelectedStageId] = useState<string>(task.stageId || (stages[0]?.id || ""));
   const [dueDate, setDueDate] = useState(
     task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : ""
   );
   const [newComment, setNewComment] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [signoffNotes, setSignoffNotes] = useState("");
 
-  // Status mapping: 3 simple states
-  const getSimpleStatus = (stage: TaskStage): "TODO" | "IN_PROGRESS" | "DONE" => {
-    if (stage === "APPROVED_CLEARED" || stage === "ARCHIVED") return "DONE";
-    if (stage === "IN_PROGRESS" || stage === "READY_FOR_TESTING") return "IN_PROGRESS";
-    return "TODO";
-  };
-
-  const currentStatus = getSimpleStatus(task.stage);
+  const signoffs = task.signoffs || [];
+  const currentSignoff = signoffs.find((s) => s.userId === currentUserId);
+  const isCurrentCleared = Boolean(currentSignoff?.cleared);
 
   // Helper to persist task updates
   const saveTaskField = async (fields: Partial<LocalTask>) => {
@@ -69,19 +77,124 @@ export function TaskGovernanceModal({
       title: updated.title,
       description: updated.description,
       priority: updated.priority,
-      dueDate: updated.dueDate,
       stage: updated.stage,
+      stageId: updated.stageId,
+      dueDate: updated.dueDate,
     });
 
     onTaskUpdated();
   };
 
-  const handleStatusChange = async (status: "TODO" | "IN_PROGRESS" | "DONE") => {
-    let nextStage: TaskStage = "PROPOSED";
-    if (status === "IN_PROGRESS") nextStage = "IN_PROGRESS";
-    if (status === "DONE") nextStage = "APPROVED_CLEARED";
+  const handleStageSelect = async (newStageId: string) => {
+    const targetStage = stages.find((s) => s.id === newStageId);
+    if (!targetStage) return;
 
-    await saveTaskField({ stage: nextStage });
+    setSelectedStageId(newStageId);
+
+    let legacyStage: TaskStage = "PROPOSED";
+    if (targetStage.isCompleted) legacyStage = "APPROVED_CLEARED";
+    else if (targetStage.order === 2) legacyStage = "DEV_ASSESSMENT";
+    else if (targetStage.order === 3) legacyStage = "IN_PROGRESS";
+    else if (targetStage.order >= 4) legacyStage = "READY_FOR_TESTING";
+
+    const updated: LocalTask = {
+      ...task,
+      stageId: targetStage.id,
+      stage: legacyStage,
+      updatedAt: new Date(),
+      version: task.version + 1,
+    };
+
+    await localDb.tasks.put(updated);
+
+    // Add audit comment
+    const auditComment: LocalTaskComment = {
+      id: `comment_audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      taskId: task.id,
+      userId: currentUserId,
+      userName: currentUserName,
+      userRole: currentRole,
+      type: CommentType.STAGE_CHANGE_AUDIT,
+      content: `Stage set to "${targetStage.name}" by ${currentUserName}.`,
+      version: 1,
+      createdAt: new Date(),
+    };
+    await localDb.taskComments.add(auditComment);
+
+    await syncManager.queueMutation("taskComment", auditComment.id, "UPSERT", {
+      taskId: task.id,
+      content: auditComment.content,
+      type: auditComment.type,
+    });
+
+    await syncManager.queueMutation("task", task.id, "STAGE_CHANGE", {
+      stageId: targetStage.id,
+      stage: legacyStage,
+      order: task.order,
+    });
+
+    onTaskUpdated();
+  };
+
+  const handleToggleSignoff = async () => {
+    const nextCleared = !isCurrentCleared;
+    const now = new Date();
+
+    const newSignoff: LocalTaskSignoff = {
+      id: currentSignoff?.id || `signoff_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      taskId: task.id,
+      userId: currentUserId,
+      userName: currentUserName,
+      cleared: nextCleared,
+      notes: signoffNotes.trim() || null,
+      clearedAt: nextCleared ? now : null,
+    };
+
+    const updatedSignoffs = signoffs.filter((s) => s.userId !== currentUserId).concat(newSignoff);
+
+    const updatedTask: LocalTask = {
+      ...task,
+      signoffs: updatedSignoffs,
+      updatedAt: now,
+      version: task.version + 1,
+    };
+
+    await localDb.tasks.put(updatedTask);
+
+    // Queue sync mutation
+    await syncManager.queueMutation("task", task.id, "SIGNOFF_CHANGE", {
+      taskId: task.id,
+      userId: currentUserId,
+      cleared: nextCleared,
+      notes: signoffNotes.trim() || null,
+    });
+
+    // Add audit comment
+    const auditMsg = nextCleared
+      ? `Clearance sign-off completed by ${currentUserName} (${currentRole.replace(/_/g, " ")}).`
+      : `Clearance sign-off revoked by ${currentUserName} (${currentRole.replace(/_/g, " ")}).`;
+
+    const auditComment: LocalTaskComment = {
+      id: `comment_audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      taskId: task.id,
+      userId: currentUserId,
+      userName: currentUserName,
+      userRole: currentRole,
+      type: CommentType.STAGE_CHANGE_AUDIT,
+      content: auditMsg,
+      version: 1,
+      createdAt: now,
+    };
+    await localDb.taskComments.add(auditComment);
+
+    await syncManager.queueMutation("taskComment", auditComment.id, "UPSERT", {
+      taskId: task.id,
+      content: auditComment.content,
+      type: auditComment.type,
+    });
+
+    setSignoffNotes("");
+    onTaskUpdated();
   };
 
   const handleTitleBlur = () => {
@@ -149,56 +262,38 @@ export function TaskGovernanceModal({
     }
   };
 
-  // Filter out system audit logs to keep discussion stress-free and simple
   const userComments = comments.filter((c) => c.type === "STANDARD_CHAT");
+  const auditLogs = comments.filter((c) => c.type !== "STANDARD_CHAT");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
         {/* Header Bar */}
-        <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+        <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4 bg-zinc-50/50 dark:bg-zinc-900/50 shrink-0">
           <div className="flex items-center gap-3">
-            <span className="font-mono text-xs px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold">
+            <span className="font-mono text-xs px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold">
               {task.projectTaskId}
             </span>
 
-            {/* 3 Simple Status Pills */}
-            <div className="flex items-center bg-zinc-200/60 dark:bg-zinc-800/80 p-0.5 rounded-lg text-xs">
-              <button
-                type="button"
-                onClick={() => handleStatusChange("TODO")}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
-                  currentStatus === "TODO"
-                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                }`}
+            {/* Dynamic Stage Selector */}
+            {stages.length > 0 ? (
+              <select
+                aria-label="Current Stage"
+                value={selectedStageId}
+                onChange={(e) => handleStageSelect(e.target.value)}
+                className="text-xs px-3 py-1 font-semibold rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none cursor-pointer"
               >
-                To Do
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStatusChange("IN_PROGRESS")}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
-                  currentStatus === "IN_PROGRESS"
-                    ? "bg-blue-500 text-white shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                }`}
-              >
-                In Progress
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStatusChange("DONE")}
-                className={`px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                  currentStatus === "DONE"
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Done</span>
-              </button>
-            </div>
+                {stages.map((stg) => (
+                  <option key={stg.id} value={stg.id}>
+                    {stg.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                {task.stage.replace(/_/g, " ")}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -250,6 +345,7 @@ export function TaskGovernanceModal({
             </label>
             <input
               type="text"
+              aria-label="Task Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleBlur}
@@ -294,39 +390,118 @@ export function TaskGovernanceModal({
             {/* Due Date */}
             <div>
               <span className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">
-                Due Date
+                Target Due Date
               </span>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={handleDueDateChange}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                />
+              <input
+                type="date"
+                aria-label="Target Due Date"
+                value={dueDate}
+                onChange={handleDueDateChange}
+                className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              />
+            </div>
+          </div>
+
+          {/* Multi-Stakeholder Clearance Matrix */}
+          <div className="bg-zinc-50 dark:bg-zinc-850/60 p-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                  Stakeholder Clearance Matrix
+                </h4>
               </div>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {signoffs.filter((s) => s.cleared).length} cleared
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {GOVERNANCE_ROLES.map((gov) => {
+                const userSignoff = signoffs.find((s) => s.userId === currentUserId && currentRole === gov.role)
+                  || signoffs.find((s) => s.cleared);
+                const hasCleared = Boolean(userSignoff?.cleared);
+
+                return (
+                  <div
+                    key={gov.role}
+                    className={`p-3 rounded-lg border flex flex-col justify-between transition-all ${
+                      hasCleared
+                        ? "bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-500/30"
+                        : "bg-white dark:bg-zinc-900 border-zinc-200/80 dark:border-zinc-800"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div>
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block">
+                          {gov.title}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 block">
+                          {gov.desc}
+                        </span>
+                      </div>
+                      {hasCleared ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full shrink-0">
+                          <Check className="w-3 h-3" /> Cleared
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full shrink-0">
+                          <Clock className="w-3 h-3" /> Pending
+                        </span>
+                      )}
+                    </div>
+
+                    {hasCleared && userSignoff?.userName && (
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate mt-1">
+                        Signed off by {userSignoff.userName}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Current User Clearance Action Button */}
+            <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                Operating as <strong className="text-zinc-800 dark:text-zinc-200">{currentUserName}</strong> ({currentRole.replace(/_/g, " ")})
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleSignoff}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all shadow-xs ${
+                  isCurrentCleared
+                    ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700"
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>{isCurrentCleared ? "Revoke My Sign-off" : "Mark Clearance Sign-Off"}</span>
+              </button>
             </div>
           </div>
 
           {/* Notes / Description */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-              Notes & Details
+              Task Notes & Details
             </label>
             <textarea
+              aria-label="Task Notes and Details"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={handleDescriptionBlur}
               rows={4}
-              className="w-full text-xs p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 leading-relaxed"
+              className="w-full text-xs p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 leading-relaxed"
             />
           </div>
 
-          {/* Simple Comments Section */}
+          {/* Comments Section */}
           <div className="border-t border-zinc-100 dark:border-zinc-800 pt-5 space-y-3">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-zinc-400" />
               <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Comments ({userComments.length})
+                Discussion ({userComments.length})
               </h4>
             </div>
 
@@ -363,9 +538,10 @@ export function TaskGovernanceModal({
             <form onSubmit={handleAddComment} className="flex gap-2 pt-1">
               <input
                 type="text"
+                aria-label="Add a comment"
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                className="flex-1 text-xs px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="flex-1 text-xs px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
               <button
                 type="submit"
@@ -380,7 +556,7 @@ export function TaskGovernanceModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
+        <div className="px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between shrink-0">
           <span className="text-[11px] text-zinc-400">
             Created by {task.creatorName || "Workspace member"}
           </span>
