@@ -118,8 +118,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       sendWelcomeEmail({
         to: newUser.email,
         name: newUser.name,
-        workspaceName: invite.workspace?.name,
-        role: invite.role,
+        workspaceName: invite.pageId ? `${newUser.name.split(" ")[0]}'s Workspace` : invite.workspace?.name,
+        role: invite.pageId ? "Owner" : invite.role,
       }).catch(() => {});
 
       // When invited to a specific note, the user starts fresh in their own workspace

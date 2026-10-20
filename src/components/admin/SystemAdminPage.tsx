@@ -219,7 +219,7 @@ export function SystemAdminPage({ onSignOut }: SystemAdminPageProps) {
             </div>
           </div>
           <div className="p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/40 text-center space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Governed Tasks</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Tasks</span>
             <div className="text-2xl font-bold font-mono text-zinc-100">
               {data?.metrics?.totalTasks || 4}
             </div>

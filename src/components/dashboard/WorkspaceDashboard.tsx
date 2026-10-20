@@ -93,7 +93,7 @@ export function WorkspaceDashboard({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">
-              {workspaceName} Operations Overview
+              {workspaceName} Overview
             </h1>
           </div>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
@@ -107,7 +107,7 @@ export function WorkspaceDashboard({
             className="text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 flex items-center gap-1.5 shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Create Governed Ticket</span>
+            <span>New Task</span>
           </button>
         </div>
       </div>
@@ -167,7 +167,7 @@ export function WorkspaceDashboard({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Governed Project Streams
+            Active Projects
           </h2>
           <span className="text-[11px] text-zinc-400 font-medium">Click card to open Kanban</span>
         </div>

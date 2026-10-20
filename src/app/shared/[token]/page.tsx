@@ -223,7 +223,7 @@ export default async function SharedDocPage({ params }: SharedPageProps) {
                 Collaborate & build in ShNotes
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Experience governed engineering task boards, offline-first notes, and team collaboration with end-to-end synchronization.
+                Experience fast offline-first notes, visual task boards, and effortless team collaboration with ShNotes.
               </p>
             </div>
 

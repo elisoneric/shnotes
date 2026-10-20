@@ -123,15 +123,15 @@ ${contextSummary}
 
 There are currently no active tasks recorded for this workspace. 
 
-You can propose an initiative on the **Governed Projects** board to begin the 7-stage review process.`;
+You can create a task on your **Projects** board to get started.`;
       } else {
-        fallbackReply = `### Active Governed Tasks: ${workspaceName}
+        fallbackReply = `### Active Tasks: ${workspaceName}
 
 | Task ID | Title | Stage | Priority |
 | :--- | :--- | :--- | :--- |
 ${activeTasks.map((t) => `| **${t.projectTaskId}** | ${t.title} | \`${t.stage.replace(/_/g, " ")}\` | **${t.priority}** |`).join("\n")}
 
-All tasks move through the 7-stage review gates before release. Click any card to inspect recommendations or sign-offs.`;
+Tasks transition across your project workflow stages. Click any card to review details or update status.`;
       }
     } else if (lower.includes("diary") || lower.includes("yesterday") || lower.includes("today")) {
       const diaryPages = recentPages.filter((p) => p.isDiary);

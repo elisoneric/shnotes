@@ -144,6 +144,9 @@ class SyncManager {
         if (Array.isArray(deltas.pages)) {
           await localDb.pages.bulkPut(deltas.pages);
         }
+        if (Array.isArray(deltas.sharedPageIds)) {
+          await localDb.syncMeta.put({ key: "sharedPageIds", value: deltas.sharedPageIds });
+        }
       }
 
       // 3. Update lastSyncedAt marker

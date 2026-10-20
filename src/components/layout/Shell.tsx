@@ -40,6 +40,7 @@ import {
   LayoutDashboard,
   Sliders,
   X,
+  Share2,
 } from "lucide-react";
 
 export interface ShellProps {
@@ -60,6 +61,7 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
   const [projects, setProjects] = useState<LocalProject[]>([]);
   const [selectedProject, setSelectedProject] = useState<LocalProject | null>(null);
   const [pages, setPages] = useState<LocalPage[]>([]);
+  const [sharedPageIds, setSharedPageIds] = useState<string[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [openPageIds, setOpenPageIds] = useState<string[]>([]);
   const [allTasks, setAllTasks] = useState<LocalTask[]>([]);
@@ -133,6 +135,10 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
 
       const allPages = await localDb.pages.filter((x) => !x.isDiary && !x.deletedAt).toArray();
       const tasks = await localDb.tasks.filter((x) => !x.deletedAt).toArray();
+
+      const sharedMeta = await localDb.syncMeta.get("sharedPageIds");
+      const sharedIds: string[] = Array.isArray(sharedMeta?.value) ? sharedMeta.value : [];
+      setSharedPageIds((prev) => (JSON.stringify(prev) === JSON.stringify(sharedIds) ? prev : sharedIds));
 
       setProjects((prev) => (JSON.stringify(prev) === JSON.stringify(p) ? prev : p));
       setPages((prev) => (JSON.stringify(prev) === JSON.stringify(allPages) ? prev : allPages));
@@ -304,6 +310,10 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
     }
   };
 
+  const activeWsId = workspaceIdRef.current || workspaceId;
+  const myPages = pages.filter((p) => (!activeWsId || p.workspaceId === activeWsId) && !sharedPageIds.includes(p.id));
+  const sharedPages = pages.filter((p) => sharedPageIds.includes(p.id) || (activeWsId ? p.workspaceId !== activeWsId : false));
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased font-sans">
       <RegisterSw />
@@ -335,7 +345,7 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
                 {workspaceName}
               </h1>
               <span className="text-[10px] text-zinc-400 font-medium truncate block mt-0.5">
-                Enterprise Workspace
+                Workspace & Notes
               </span>
             </div>
           </div>
@@ -363,17 +373,17 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5 text-blue-500" />
-              <span>Overview Dashboard</span>
+              <span>Overview</span>
             </button>
           </div>
 
-          {/* Governed Projects */}
+          {/* Projects */}
           <div className="space-y-1">
             <div className="px-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-              <span>Governed Projects</span>
+              <span>Projects</span>
               <button
                 onClick={() => setIsCreateProjectOpen(true)}
-                title="Create new operational stream"
+                title="Create project"
                 className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -450,22 +460,23 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
             </button>
           </div>
 
-          {/* Canvas Notes / Specifications */}
+          {/* My Notes */}
           <div className="space-y-1">
             <div className="px-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-              <span>Canvas Notes</span>
+              <span>My Notes</span>
               <button
                 onClick={handleCreateNewPage}
-                title="Create canvas note"
+                title="Create note"
                 className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {pages
-              .filter((p) => p.workspaceId === (workspaceIdRef.current || workspaceId))
-              .map((p) => {
+            {myPages.length === 0 ? (
+              <div className="px-2 py-1 text-xs text-zinc-400">No notes yet</div>
+            ) : (
+              myPages.map((p) => {
                 const isSelected = currentView === "PAGE" && selectedPageId === p.id;
                 return (
                   <div key={p.id} className="group flex items-center justify-between">
@@ -495,8 +506,52 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
                     </button>
                   </div>
                 );
-              })}
+              })
+            )}
           </div>
+
+          {/* Shared with Me */}
+          {sharedPages.length > 0 && (
+            <div className="space-y-1 pt-2">
+              <div className="px-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                <div className="flex items-center gap-1.5">
+                  <Share2 className="w-3 h-3 text-emerald-500" />
+                  <span>Shared with Me</span>
+                </div>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-bold">
+                  {sharedPages.length}
+                </span>
+              </div>
+
+              {sharedPages.map((p) => {
+                const isSelected = currentView === "PAGE" && selectedPageId === p.id;
+                return (
+                  <div key={p.id} className="group flex items-center justify-between">
+                    <button
+                      onClick={() => {
+                        setSelectedPageId(p.id);
+                        setCurrentView("PAGE");
+                        closeSidebarOnMobile();
+                      }}
+                      className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-colors min-w-0 ${
+                        isSelected
+                          ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate min-w-0">
+                        <FileText className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span className="truncate">{p.title || "Untitled Shared Note"}</span>
+                      </div>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 shrink-0 font-medium">
+                        Shared
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Workspace Settings (OWNER and HOO only) */}
           {(currentRole === "OWNER" || currentRole === "HOO") && (
@@ -642,7 +697,7 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
                       setSelectedPageId(pId);
                       setCurrentView("PAGE");
                     }}
-                    className={`group px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer max-w-[180px] ${
+                    className={`group px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer max-w-[130px] sm:max-w-[190px] ${
                       isActive
                         ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
                         : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40"

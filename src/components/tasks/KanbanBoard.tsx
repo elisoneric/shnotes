@@ -525,7 +525,7 @@ export function KanbanBoard({
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
               <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                New Governed Ticket ({createStage.replace(/_/g, " ")})
+                New Task ({createStage.replace(/_/g, " ")})
               </h3>
               <button
                 onClick={() => setIsCreateOpen(false)}

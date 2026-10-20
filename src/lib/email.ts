@@ -359,16 +359,16 @@ export async function sendDocumentInviteEmail(params: {
       from: normalizeSenderAddress(config.from, config.user),
       to: params.to.trim(),
       subject: `${params.inviterName} invited you to collaborate on "${params.documentTitle}"`,
-      text: `${params.inviterName} has invited you to collaborate on "${params.documentTitle}" in ${params.workspaceName}.\n\nPermission: ${roleLabel}\n${params.allowGuest ? "Guest access is enabled.\n" : ""}Access URL: ${params.inviteUrl}\n\nThis invitation link expires in 14 days.`,
+      text: `${params.inviterName} has invited you to collaborate on "${params.documentTitle}".\n\nPermission: ${roleLabel}\n${params.allowGuest ? "Guest access is enabled.\n" : ""}Access URL: ${params.inviteUrl}\n\nThis invitation grants access specifically to this canvas note.`,
       html: renderCleanEmailTemplate({
         title: `${params.inviterName} invited you to collaborate`,
         badge: params.workspaceName,
         headline: `Collaborate on "${params.documentTitle}"`,
-        bodyHtml: `<strong>${params.inviterName}</strong> has invited you to collaborate on the document <strong>"${params.documentTitle}"</strong>.`,
+        bodyHtml: `<strong>${params.inviterName}</strong> has invited you to collaborate on the canvas note <strong>"${params.documentTitle}"</strong>.<br/><br/><span style="font-size: 13px; color: #6b7280;">This invitation grants access specifically to this note.</span>`,
         details: [
           { label: "Document", value: params.documentTitle },
           { label: "Permission", value: roleLabel },
-          { label: "Access Mode", value: params.allowGuest ? "Guest access enabled" : "Workspace member" },
+          { label: "Access Mode", value: params.allowGuest ? "Guest access enabled" : "Collaborator access" },
         ],
         ctaText: "Open Document",
         ctaUrl: params.inviteUrl,
@@ -385,7 +385,7 @@ export async function sendDocumentInviteEmail(params: {
 }
 
 /**
- * Dispatches an enterprise welcome onboarding email to a new user or team member.
+ * Dispatches a welcome onboarding email to a new user or team member.
  */
 export async function sendWelcomeEmail(params: {
   to: string;
@@ -409,8 +409,8 @@ export async function sendWelcomeEmail(params: {
     await transporter.sendMail({
       from: normalizeSenderAddress(config.from, config.user),
       to: params.to.trim(),
-      subject: `Welcome to ShNotes – Your Governed Engineering Workspace`,
-      text: `Welcome to ShNotes, ${params.name}!\n\nYour account has been set up with access to the ${workspaceName} workspace as ${roleName}.\n\nAccess your workspace at: ${appUrl}/app`,
+      subject: `Welcome to ShNotes – Your Workspace for Notes & Tasks`,
+      text: `Welcome to ShNotes, ${params.name}!\n\nYour account has been set up with access to ${workspaceName} as ${roleName}.\n\nAccess your workspace at: ${appUrl}/app`,
       html: renderCleanEmailTemplate({
         title: "Welcome to ShNotes",
         badge: workspaceName,
@@ -423,7 +423,7 @@ export async function sendWelcomeEmail(params: {
         ],
         ctaText: "Open Workspace",
         ctaUrl: `${appUrl}/app`,
-        footerText: "ShNotes Enterprise — Governed engineering workspace and notes.",
+        footerText: "ShNotes — Clean notes and visual tasks for teams.",
       }),
     });
 

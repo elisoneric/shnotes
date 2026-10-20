@@ -182,7 +182,7 @@ export function AiChatDrawer({ isOpen, onClose }: AiChatDrawerProps) {
     {
       role: "assistant",
       content:
-        "Hello. I am your Indunix Assistant. I have live context over your active workspace initiatives, governed tasks, and diary logs. How can I assist you with architecture, QA, or task triage?",
+        "Hello! I am your Indunix Assistant. I have live context over your workspace notes, project tasks, and diary logs. How can I assist you with writing, planning, or organizing today?",
     },
   ]);
   const [input, setInput] = useState("");

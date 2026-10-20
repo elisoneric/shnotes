@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: process.env.WORKSPACE_NAME ?? "ShNotes | Governed Workflow & Operations",
-  description: "Enterprise engineering workflow, governed tasks, and offline-first notes.",
+  title: process.env.WORKSPACE_NAME ?? "ShNotes — Clean Notes & Fast Tasks",
+  description: "Fast, beautiful, offline-first notes with integrated task workflows.",
   manifest: "/manifest.json",
   icons: {
     icon: [

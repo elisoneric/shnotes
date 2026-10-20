@@ -301,6 +301,7 @@ export async function POST(req: Request) {
         tasks: formattedTasks,
         taskComments: formattedComments,
         pages,
+        sharedPageIds,
       },
       currentServerTime: new Date().toISOString(),
     });
