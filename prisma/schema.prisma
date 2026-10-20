@@ -93,6 +93,9 @@ model User {
   comments           TaskComment[]
   sessions           AuthSession[]
   pageCollaborations PageCollaborator[]
+  noteLockPinHash    String?            // Hashed 4-digit master note lock PIN
+  pinRecoveryCode    String?            // 6-digit email recovery code
+  pinRecoveryExpires DateTime?          // Code expiration timestamp
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -266,6 +269,8 @@ model Page {
   isDiary         Boolean            @default(false)
   diaryDate       DateTime?
   isPrivate       Boolean            @default(false) // Private dev scratchpad notes
+  isLocked        Boolean            @default(false) // 4-digit PIN locked note
+  lockPinHash     String?                            // Optional note-specific PIN override
   layout          String?            @default("centered") // "centered" (768px) vs "full"
   fontFamily      String?            @default("sans")     // "sans" | "serif" | "mono"
   fontSize        String?            @default("normal")   // "small" | "normal"

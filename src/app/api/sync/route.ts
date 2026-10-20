@@ -169,6 +169,8 @@ export async function POST(req: Request) {
                   fontFamily: payload.fontFamily !== undefined ? payload.fontFamily : existing.fontFamily,
                   fontSize: payload.fontSize !== undefined ? payload.fontSize : existing.fontSize,
                   secretToken: payload.secretToken !== undefined ? payload.secretToken : existing.secretToken,
+                  isPrivate: payload.isPrivate !== undefined ? payload.isPrivate : existing.isPrivate,
+                  isLocked: payload.isLocked !== undefined ? payload.isLocked : existing.isLocked,
                   version: { increment: 1 },
                 },
               });
@@ -193,6 +195,8 @@ export async function POST(req: Request) {
                     content: payload.content || { blocks: [] },
                     isDiary: Boolean(payload.isDiary),
                     diaryDate: payload.diaryDate ? new Date(payload.diaryDate) : null,
+                    isPrivate: Boolean(payload.isPrivate),
+                    isLocked: Boolean(payload.isLocked),
                     layout: payload.layout || "centered",
                     fontFamily: payload.fontFamily || "sans",
                     fontSize: payload.fontSize || "normal",

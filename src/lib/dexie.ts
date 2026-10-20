@@ -98,6 +98,8 @@ export interface LocalPage {
   isDiary: boolean;
   diaryDate?: Date | null;
   isPrivate?: boolean;
+  isLocked?: boolean;
+  lockPinHash?: string | null;
   layout?: "centered" | "full" | string | null;
   fontFamily?: "sans" | "serif" | "mono" | string | null;
   fontSize?: "small" | "normal" | string | null;

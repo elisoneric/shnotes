@@ -531,7 +531,9 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
                           : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
                       }`}
                     >
-                      {p.isPrivate ? (
+                      {p.isLocked ? (
+                        <Lock className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                      ) : p.isPrivate ? (
                         <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                       ) : (
                         <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
@@ -715,7 +717,13 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
                         : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40"
                     }`}
                   >
-                    <FileText className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+                    {pageItem?.isLocked ? (
+                      <Lock className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                    ) : pageItem?.isPrivate ? (
+                      <Lock className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                    ) : (
+                      <FileText className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+                    )}
                     <span className="truncate">{pageTitle}</span>
                     <button
                       type="button"

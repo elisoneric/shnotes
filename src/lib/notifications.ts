@@ -48,6 +48,34 @@ export async function getNotificationConfig() {
   return { quietWindowMinutes, minIntervalMinutes, maxPerDay };
 }
 
+export async function saveNotificationConfig(config: {
+  maxPerDay?: number;
+  minIntervalMinutes?: number;
+  quietWindowMinutes?: number;
+}) {
+  if (config.maxPerDay !== undefined) {
+    await prisma.systemSetting.upsert({
+      where: { key: "notify_max_per_day" },
+      create: { key: "notify_max_per_day", value: String(config.maxPerDay) },
+      update: { value: String(config.maxPerDay) },
+    });
+  }
+  if (config.minIntervalMinutes !== undefined) {
+    await prisma.systemSetting.upsert({
+      where: { key: "notify_min_interval" },
+      create: { key: "notify_min_interval", value: String(config.minIntervalMinutes) },
+      update: { value: String(config.minIntervalMinutes) },
+    });
+  }
+  if (config.quietWindowMinutes !== undefined) {
+    await prisma.systemSetting.upsert({
+      where: { key: "notify_quiet_window" },
+      create: { key: "notify_quiet_window", value: String(config.quietWindowMinutes) },
+      update: { value: String(config.quietWindowMinutes) },
+    });
+  }
+}
+
 /**
  * Records an edit on a document, debouncing and packaging the editing session.
  */
@@ -292,11 +320,20 @@ async function dispatchConsolidatedNotification(session: DocumentEditSession): P
     ],
     ctaText: "Review Document Changes",
     ctaUrl: documentUrl,
-    footerText: "Consolidated update notification to prevent email spam. Sent to document collaborators and subscribers.",
+    footerText: `Consolidated notification limited to max ${config.maxPerDay} daily updates per user to prevent inbox flooding. Sent to document collaborators and subscribers.`,
   });
 
-  // Send to all recipients
+  // Send to recipients with individual daily flood limits
   for (const to of Array.from(recipientEmails)) {
+    const recipientDailyKey = `recipient_daily_count_${to}_${todayDateStr}`;
+    const recipientRecord = await prisma.systemSetting.findUnique({ where: { key: recipientDailyKey } });
+    const recipientDailyCount = recipientRecord ? parseInt(recipientRecord.value, 10) : 0;
+
+    if (recipientDailyCount >= config.maxPerDay) {
+      console.log(`[Notifications] Skipping recipient ${to}: reached daily inbox flood limit of ${config.maxPerDay} notifications.`);
+      continue;
+    }
+
     try {
       await transporter.sendMail({
         from: normalizeSenderAddress(smtpConfig.from, smtpConfig.user),
@@ -304,6 +341,13 @@ async function dispatchConsolidatedNotification(session: DocumentEditSession): P
         subject,
         text: `${editorName} updated "${page.title}" (${editCount} modifications). Review changes at: ${documentUrl}`,
         html: htmlBody,
+      });
+
+      // Increment recipient's daily count
+      await prisma.systemSetting.upsert({
+        where: { key: recipientDailyKey },
+        create: { key: recipientDailyKey, value: String(recipientDailyCount + 1) },
+        update: { value: String(recipientDailyCount + 1) },
       });
     } catch (sendErr) {
       console.warn(`[Notifications] Failed sending digest to ${to}:`, sendErr);

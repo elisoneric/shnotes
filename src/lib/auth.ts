@@ -23,6 +23,23 @@ export function verifyPassword(password: string, combinedHash: string): boolean 
   }
 }
 
+export function hashPin(pin: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(pin, salt, 32).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+export function verifyPin(pin: string, combinedHash: string): boolean {
+  try {
+    const [salt, originalHash] = combinedHash.split(":");
+    if (!salt || !originalHash) return false;
+    const computedHash = crypto.scryptSync(pin, salt, 32).toString("hex");
+    return crypto.timingSafeEqual(Buffer.from(originalHash, "hex"), Buffer.from(computedHash, "hex"));
+  } catch {
+    return false;
+  }
+}
+
 export async function createSession(userId: string, userAgent?: string): Promise<string> {
   const rawToken = crypto.randomBytes(32).toString("base64url");
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");

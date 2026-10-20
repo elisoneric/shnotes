@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import { User, Lock, Moon, Sun, Smartphone, X, Check, AlertCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { User, Lock, Moon, Sun, Smartphone, X, Check, AlertCircle, KeyRound } from "lucide-react";
+import { SetNotePinModal } from "@/components/editor/SetNotePinModal";
 
 interface ProfileSettingsModalProps {
   currentUserName: string;
@@ -29,6 +30,19 @@ export function ProfileSettingsModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Note Lock PIN State
+  const [hasPin, setHasPin] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/user/pin")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) setHasPin(Boolean(data.hasPin));
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +174,36 @@ export function ProfileSettingsModal({
             </div>
           </div>
 
+          {/* Note Lock Security PIN */}
+          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                <span>Note Lock PIN</span>
+              </div>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded font-mono ${
+                  hasPin
+                    ? "bg-amber-500/10 text-amber-500 dark:bg-amber-400/10 dark:text-amber-400"
+                    : "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400"
+                }`}
+              >
+                {hasPin ? "Configured (4-Digit)" : "Not Configured"}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Locks sensitive documents behind an instant 4-digit PIN with email recovery.
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsPinModalOpen(true)}
+              className="w-full text-xs py-2 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium transition-colors flex items-center justify-center gap-1.5"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{hasPin ? "Change 4-Digit Note Lock PIN" : "Configure 4-Digit PIN"}</span>
+            </button>
+          </div>
+
           <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button
@@ -191,6 +235,16 @@ export function ProfileSettingsModal({
           </div>
         </form>
       </div>
+
+      <SetNotePinModal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+        onSuccess={() => {
+          setHasPin(true);
+          setSuccess("Note Lock PIN successfully updated.");
+          setTimeout(() => setSuccess(null), 4000);
+        }}
+      />
     </div>
   );
 }

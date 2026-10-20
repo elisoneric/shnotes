@@ -13,6 +13,8 @@ import {
   Server,
   Zap,
   Globe,
+  Bell,
+  Clock,
 } from "lucide-react";
 
 export function SmtpAdminPanel() {
@@ -25,6 +27,12 @@ export function SmtpAdminPanel() {
     from: "",
     appUrl: "",
     hasPassword: false,
+  });
+
+  const [notifyConfig, setNotifyConfig] = useState({
+    maxPerDay: 3,
+    minIntervalMinutes: 60,
+    quietWindowMinutes: 15,
   });
 
   const [loading, setLoading] = useState(true);
@@ -62,6 +70,13 @@ export function SmtpAdminPanel() {
           appUrl: data.config.appUrl || "https://note.esam.com.ng",
           hasPassword: Boolean(data.config.hasPassword),
         });
+        if (data.notifications) {
+          setNotifyConfig({
+            maxPerDay: data.notifications.maxPerDay || 3,
+            minIntervalMinutes: data.notifications.minIntervalMinutes || 60,
+            quietWindowMinutes: data.notifications.quietWindowMinutes || 15,
+          });
+        }
       } else {
         setSaveError(data.error || "Failed to load SMTP configuration");
       }
@@ -94,6 +109,9 @@ export function SmtpAdminPanel() {
           pass: config.pass === "••••••••" ? undefined : config.pass,
           from: config.from,
           appUrl: config.appUrl,
+          maxPerDay: Number(notifyConfig.maxPerDay),
+          minIntervalMinutes: Number(notifyConfig.minIntervalMinutes),
+          quietWindowMinutes: Number(notifyConfig.quietWindowMinutes),
         }),
       });
 
@@ -318,6 +336,81 @@ export function SmtpAdminPanel() {
             />
             <span>Use Direct SSL/TLS encryption (Port 465) instead of STARTTLS (Port 587)</span>
           </label>
+        </div>
+
+        {/* Anti-Flood & Rate Limiting Controls */}
+        <div className="pt-4 border-t border-zinc-800 space-y-3">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-sky-400" />
+            <h3 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+              Document Edit Notification Limits & Anti-Flood Protection
+            </h3>
+          </div>
+          <p className="text-[11px] text-zinc-400">
+            Regulates automated email dispatch when documents are edited or collaborated on. Avoids flooding user inboxes with repetitive alerts.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-zinc-300">
+                Max Notifications Per User / Day
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={notifyConfig.maxPerDay}
+                onChange={(e) =>
+                  setNotifyConfig({ ...notifyConfig, maxPerDay: Number(e.target.value) })
+                }
+                aria-label="Maximum Notifications Per User Per Day"
+                className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 focus:outline-none focus:border-zinc-700 font-mono"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Default: 3 emails daily. Excess edits are grouped or suppressed.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-zinc-300">
+                Min Interval Between Emails (Minutes)
+              </label>
+              <input
+                type="number"
+                min="5"
+                max="1440"
+                value={notifyConfig.minIntervalMinutes}
+                onChange={(e) =>
+                  setNotifyConfig({ ...notifyConfig, minIntervalMinutes: Number(e.target.value) })
+                }
+                aria-label="Minimum Interval Between Emails in Minutes"
+                className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 focus:outline-none focus:border-zinc-700 font-mono"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Cool-down window before sending another notification for the same document.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-zinc-300">
+                Quiet Window (Minutes)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={notifyConfig.quietWindowMinutes}
+                onChange={(e) =>
+                  setNotifyConfig({ ...notifyConfig, quietWindowMinutes: Number(e.target.value) })
+                }
+                aria-label="Quiet Window in Minutes"
+                className="w-full text-xs px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-100 focus:outline-none focus:border-zinc-700 font-mono"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Buffers rapid keystrokes/edits so only one digest is sent once typing ceases.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2">

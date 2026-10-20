@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { getSmtpConfig, saveSmtpConfig, testSmtpConnection } from "@/lib/email";
+import { getSmtpConfig, saveSmtpConfig } from "@/lib/email";
+import { getNotificationConfig, saveNotificationConfig } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export async function GET() {
     }
 
     const config = await getSmtpConfig();
+    const notifications = await getNotificationConfig();
 
     return NextResponse.json({
       ok: true,
@@ -24,6 +26,7 @@ export async function GET() {
         from: config.from,
         appUrl: config.appUrl,
       },
+      notifications,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to load SMTP settings" }, { status: 500 });
@@ -38,20 +41,30 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { host, port, secure, user: smtpUser, pass, from, appUrl } = body;
+    const { host, port, secure, user: smtpUser, pass, from, appUrl, maxPerDay, minIntervalMinutes, quietWindowMinutes } = body;
 
-    await saveSmtpConfig({
-      host,
-      port: Number(port) || 587,
-      secure: Boolean(secure),
-      user: smtpUser,
-      pass,
-      from,
-      appUrl,
-    });
+    if (host !== undefined) {
+      await saveSmtpConfig({
+        host,
+        port: Number(port) || 587,
+        secure: Boolean(secure),
+        user: smtpUser,
+        pass,
+        from,
+        appUrl,
+      });
+    }
 
-    return NextResponse.json({ ok: true, message: "SMTP configuration saved successfully" });
+    if (maxPerDay !== undefined || minIntervalMinutes !== undefined || quietWindowMinutes !== undefined) {
+      await saveNotificationConfig({
+        maxPerDay: maxPerDay !== undefined ? Number(maxPerDay) : undefined,
+        minIntervalMinutes: minIntervalMinutes !== undefined ? Number(minIntervalMinutes) : undefined,
+        quietWindowMinutes: quietWindowMinutes !== undefined ? Number(quietWindowMinutes) : undefined,
+      });
+    }
+
+    return NextResponse.json({ ok: true, message: "Configuration saved successfully" });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to save SMTP configuration" }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to save configuration" }, { status: 500 });
   }
 }

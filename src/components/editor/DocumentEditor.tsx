@@ -32,6 +32,11 @@ import {
 import { SharePopover } from "./SharePopover";
 import { autoCorrectOnInput } from "@/lib/autocorrect";
 import { TaskGovernanceModal } from "@/components/tasks/TaskGovernanceModal";
+import { NotePinChallenge } from "./NotePinChallenge";
+import { SetNotePinModal } from "./SetNotePinModal";
+
+// In-memory session cache of pages unlocked by PIN in current browsing session
+const sessionUnlockedPageIds = new Set<string>();
 
 interface BlockItem {
   id: string;
@@ -63,6 +68,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
   const [grammarStatus, setGrammarStatus] = useState<string | null>(null);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
+
+  // Note Lock Security State
+  const [unlockedPageIds, setUnlockedPageIds] = useState<Set<string>>(sessionUnlockedPageIds);
+  const [isSetPinModalOpen, setIsSetPinModalOpen] = useState(false);
 
   // Project Tasks & Stages for Interactive Task Blocks
   const [availableTasks, setAvailableTasks] = useState<LocalTask[]>([]);
@@ -170,6 +179,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
         fontSize: nextSize,
         secretToken,
         isPrivate: page.isPrivate,
+        isLocked: page.isLocked,
         workspaceId: page.workspaceId,
       });
     }
@@ -190,6 +200,79 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
       title,
       content: { blocks },
       isPrivate: nextPrivate,
+      isLocked: page.isLocked,
+      layout,
+      fontFamily,
+      fontSize,
+      secretToken,
+      workspaceId: page.workspaceId,
+    });
+  };
+
+  const handleToggleLock = async () => {
+    if (!page) return;
+
+    if (!page.isLocked) {
+      // Check if user has a PIN configured
+      try {
+        const res = await fetch("/api/user/pin");
+        const data = await res.json();
+        if (!data.ok || !data.hasPin) {
+          setIsSetPinModalOpen(true);
+          return;
+        }
+      } catch {
+        setIsSetPinModalOpen(true);
+        return;
+      }
+    }
+
+    const nextLocked = !page.isLocked;
+    const updatedPage: LocalPage = {
+      ...page,
+      isLocked: nextLocked,
+      version: (page.version || 1) + 1,
+      updatedAt: new Date(),
+    };
+    setPage(updatedPage);
+    if (!nextLocked) {
+      sessionUnlockedPageIds.delete(page.id);
+      setUnlockedPageIds(new Set(sessionUnlockedPageIds));
+    } else {
+      sessionUnlockedPageIds.add(page.id);
+      setUnlockedPageIds(new Set(sessionUnlockedPageIds));
+    }
+    await localDb.pages.put(updatedPage);
+    await syncManager.queueMutation("page", page.id, "UPSERT", {
+      title,
+      content: { blocks },
+      isPrivate: page.isPrivate,
+      isLocked: nextLocked,
+      layout,
+      fontFamily,
+      fontSize,
+      secretToken,
+      workspaceId: page.workspaceId,
+    });
+  };
+
+  const handlePinSetSuccess = async () => {
+    if (!page) return;
+    const updatedPage: LocalPage = {
+      ...page,
+      isLocked: true,
+      version: (page.version || 1) + 1,
+      updatedAt: new Date(),
+    };
+    setPage(updatedPage);
+    sessionUnlockedPageIds.add(page.id);
+    setUnlockedPageIds(new Set(sessionUnlockedPageIds));
+    await localDb.pages.put(updatedPage);
+    await syncManager.queueMutation("page", page.id, "UPSERT", {
+      title,
+      content: { blocks },
+      isPrivate: page.isPrivate,
+      isLocked: true,
       layout,
       fontFamily,
       fontSize,
@@ -288,6 +371,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
         content: { blocks: updatedBlocks },
         secretToken: currentToken,
         isPrivate: page.isPrivate,
+        isLocked: page.isLocked,
         workspaceId: page.workspaceId,
       });
     },
@@ -381,6 +465,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
             fontSize,
             secretToken,
             isPrivate: page.isPrivate,
+            isLocked: page.isLocked,
             workspaceId: page.workspaceId,
           });
         }
@@ -650,6 +735,21 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     return <div className="p-8 text-xs text-zinc-400">Loading document...</div>;
   }
 
+  if (page.isLocked && !unlockedPageIds.has(page.id)) {
+    return (
+      <div className="flex-1 flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto">
+        <NotePinChallenge
+          pageId={page.id}
+          pageTitle={title || page.title || "Untitled Document"}
+          onUnlock={() => {
+            sessionUnlockedPageIds.add(page.id);
+            setUnlockedPageIds(new Set(sessionUnlockedPageIds));
+          }}
+        />
+      </div>
+    );
+  }
+
   const fontClass = fontFamily === "serif" ? "font-serif" : fontFamily === "mono" ? "font-mono" : "font-sans";
   const sizeClass = fontSize === "small" ? "text-xs" : "text-sm";
   const containerWidth = layout === "full" ? "max-w-6xl w-full px-4 sm:px-10" : "max-w-3xl w-full px-4 sm:px-8";
@@ -666,6 +766,13 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           <span className="truncate">ShNotes Document Canvas</span>
           <span>•</span>
           <span className="text-zinc-500 shrink-0">{blocks.length} blocks</span>
+
+          {page.isLocked && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full shrink-0">
+              <Lock className="w-3 h-3 text-rose-500" />
+              <span>PIN Locked</span>
+            </span>
+          )}
 
           {page.isPrivate && (
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full shrink-0">
@@ -743,6 +850,47 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       />
                     </button>
                   </div>
+                </div>
+
+                {/* Lock Note Toggle */}
+                <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Lock className="w-3 h-3 text-rose-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">Lock Note</span>
+                      </div>
+                      <span className="text-[11px] text-zinc-500">Requires 4-digit PIN to open</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleToggleLock}
+                      className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        page.isLocked ? "bg-rose-500" : "bg-zinc-200 dark:bg-zinc-700"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                          page.isLocked ? "translate-x-3.5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {page.isLocked && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sessionUnlockedPageIds.delete(page.id);
+                        setUnlockedPageIds(new Set(sessionUnlockedPageIds));
+                        setPreferencesOpen(false);
+                      }}
+                      className="w-full mt-1.5 px-2 py-1.5 rounded-lg text-left text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Lock Note Now</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Page Layout */}
@@ -1563,6 +1711,15 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           onClose={() => setSharePopoverOpen(false)}
         />
       )}
+
+      {/* Set Note Lock PIN Modal */}
+      <SetNotePinModal
+        isOpen={isSetPinModalOpen}
+        onClose={() => setIsSetPinModalOpen(false)}
+        onSuccess={handlePinSetSuccess}
+        title="Set Note Lock PIN"
+        description="Choose a 4-digit PIN to lock this note. Once set, this note can only be accessed with your PIN or via email recovery."
+      />
     </div>
   );
 }
