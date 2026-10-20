@@ -12,3 +12,4 @@ android/.gradle
 tools/
 *.zip
 releases/ShNotes-Windows-Desktop/
+public/downloads/

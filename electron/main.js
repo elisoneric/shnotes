@@ -55,9 +55,9 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: "ShNotes Enterprise Governance",
+    title: "ShNotes — Clean Notes & Fast Tasks",
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
-    backgroundColor: "#09090b",
+    backgroundColor: "#ffffff",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

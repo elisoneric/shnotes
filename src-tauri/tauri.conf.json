@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
   "productName": "ShNotes",
   "version": "0.1.0",
-  "identifier": "io.shnotes.governance",
+  "identifier": "io.shnotes.desktop",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000"
@@ -11,7 +11,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "ShNotes Enterprise Governance",
+        "title": "ShNotes — Clean Notes & Fast Tasks",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
