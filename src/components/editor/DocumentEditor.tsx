@@ -95,15 +95,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     [autoResizeTextarea]
   );
 
-  // Invite Modal State
-  const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const [inviteRole, setInviteRole] = useState<"CONTRIBUTOR" | "REVIEWER_GUIDE" | "VIEWER">("CONTRIBUTOR");
-  const [inviteAllowGuest, setInviteAllowGuest] = useState(true);
-  const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
-  const [inviteCopied, setInviteCopied] = useState(false);
-  const [generatingInvite, setGeneratingInvite] = useState(false);
-  const [collaborators, setCollaborators] = useState<{ id: string; name: string; email: string; role: string }[]>([]);
-
   useEffect(() => {
     async function loadPage() {
       const p = await localDb.pages.get(pageId);
@@ -179,24 +170,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
       workspaceId: page.workspaceId,
     });
   };
-
-  const loadCollaborators = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/invite?pageId=${pageId}`);
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.members)) {
-        setCollaborators(data.members);
-      }
-    } catch (err) {
-      console.warn("Failed to fetch collaborators:", err);
-    }
-  }, [pageId]);
-
-  useEffect(() => {
-    if (inviteModalOpen) {
-      loadCollaborators();
-    }
-  }, [inviteModalOpen, loadCollaborators]);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedVersionRef = useRef<number>(0);
@@ -493,57 +466,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
     const updated = blocks.filter((b) => b.id !== id);
     setBlocks(updated);
     saveContent(title, updated, secretToken);
-  };
-
-  const toggleShare = () => {
-    let token = secretToken;
-    if (token) {
-      token = null; // Unpublish
-    } else {
-      token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-    }
-    setSecretToken(token);
-    saveContent(title, blocks, token);
-  };
-
-  const copyShareLink = () => {
-    if (!secretToken) return;
-    const url = `${window.location.origin}/shared/${secretToken}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleGenerateInvite = async () => {
-    setGeneratingInvite(true);
-    try {
-      const res = await fetch("/api/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pageId,
-          role: inviteRole,
-          allowGuest: inviteAllowGuest,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok && data.invite?.inviteUrl) {
-        setCreatedInviteUrl(data.invite.inviteUrl);
-      }
-    } catch (err) {
-      console.warn("Failed to generate invite:", err);
-    } finally {
-      setGeneratingInvite(false);
-    }
-  };
-
-  const copyInviteLink = () => {
-    if (!createdInviteUrl) return;
-    navigator.clipboard.writeText(createdInviteUrl);
-    setInviteCopied(true);
-    setTimeout(() => setInviteCopied(false), 2000);
   };
 
   if (!page) {
@@ -1104,148 +1026,6 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           </button>
         </div>
       </div>
-
-      {/* Invite Collaborator Modal */}
-      {inviteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-amber-500" />
-                <h3 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">Invite Note Collaborator</h3>
-              </div>
-              <button
-                onClick={() => setInviteModalOpen(false)}
-                className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Access Level / Role
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setInviteRole("CONTRIBUTOR")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      inviteRole === "CONTRIBUTOR"
-                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                        : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                    }`}
-                  >
-                    <div className="text-xs font-bold">Editor</div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5">Can edit canvas & add blocks</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setInviteRole("REVIEWER_GUIDE")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      inviteRole === "REVIEWER_GUIDE"
-                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                        : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                    }`}
-                  >
-                    <div className="text-xs font-bold">Commenter</div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5">Can review & add guidance</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setInviteRole("VIEWER")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      inviteRole === "VIEWER"
-                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                        : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                    }`}
-                  >
-                    <div className="text-xs font-bold">Viewer</div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5">Read-only document access</div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Guest View Permission */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                <div className="space-y-0.5">
-                  <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                    Allow Guest Access
-                  </div>
-                  <div className="text-[11px] text-zinc-400">
-                    Invited users can read this canvas note immediately without creating an account.
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={inviteAllowGuest}
-                  onChange={(e) => setInviteAllowGuest(e.target.checked)}
-                  className="rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 focus:ring-0 cursor-pointer"
-                />
-              </div>
-
-              {/* Link Generator */}
-              <div className="space-y-2">
-                <button
-                  onClick={handleGenerateInvite}
-                  disabled={generatingInvite}
-                  className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-                >
-                  <Link2 className="w-3.5 h-3.5" />
-                  <span>{generatingInvite ? "Generating Invite Link..." : "Generate Invite Link"}</span>
-                </button>
-
-                {createdInviteUrl && (
-                  <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-2">
-                    <span className="text-xs font-mono truncate text-zinc-700 dark:text-zinc-300">
-                      {createdInviteUrl}
-                    </span>
-                    <button
-                      onClick={copyInviteLink}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold shrink-0 flex items-center gap-1"
-                    >
-                      {inviteCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{inviteCopied ? "Copied" : "Copy"}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Existing Workspace Collaborators */}
-              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                  Current Workspace Members
-                </div>
-                <div className="max-h-36 overflow-y-auto space-y-1">
-                  {collaborators.length === 0 ? (
-                    <div className="text-xs text-zinc-400 py-1">Loading members...</div>
-                  ) : (
-                    collaborators.map((c) => (
-                      <div
-                        key={c.id}
-                        className="p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 flex items-center justify-between text-xs"
-                      >
-                        <div className="min-w-0">
-                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate block">
-                            {c.name}
-                          </span>
-                          <span className="text-[10px] text-zinc-400 truncate block">{c.email}</span>
-                        </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 capitalize font-medium">
-                          {c.role.toLowerCase().replace(/_/g, " ")}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Consolidated Share Popover */}
       {sharePopoverOpen && page && (
