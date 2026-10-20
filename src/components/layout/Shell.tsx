@@ -58,7 +58,7 @@ export interface ShellProps {
 }
 
 export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {}) {
-  const { status, pendingCount, triggerSync, isSyncing } = useSync();
+  const { triggerSync } = useSync();
 
   // Navigation State
   const [currentView, setCurrentView] = useState<"DASHBOARD" | "TASKS" | "PAGE" | "DIARY" | "ADMIN">(initialView);
@@ -618,37 +618,6 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
               </button>
             </div>
           )}
-        </div>
-
-        {/* Sync Status Badge */}
-        <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90">
-          <button
-            onClick={triggerSync}
-            disabled={isSyncing}
-            className="w-full p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/60 dark:border-zinc-700/60 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <div className="flex items-center gap-2 truncate">
-              {status === "SYNCING" ? (
-                <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin shrink-0" />
-              ) : status === "OFFLINE" ? (
-                <WifiOff className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              ) : pendingCount > 0 ? (
-                <RefreshCw className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              ) : (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              )}
-              <span className="font-medium text-[11px] truncate">
-                {status === "SYNCING"
-                  ? "Syncing changes..."
-                  : status === "OFFLINE"
-                  ? `Offline (${pendingCount})`
-                  : pendingCount > 0
-                  ? `${pendingCount} queued`
-                  : "Saved & synced"}
-              </span>
-            </div>
-            <span className="text-[10px] text-zinc-400 uppercase font-mono shrink-0 ml-1">Sync</span>
-          </button>
         </div>
 
         {/* User Account & Logout Footer */}
