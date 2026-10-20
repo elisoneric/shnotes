@@ -31,8 +31,11 @@ import {
   AlignLeft,
   Image as ImageIcon,
   Upload,
+  Sparkles,
+  CheckCheck,
 } from "lucide-react";
 import { SharePopover } from "./SharePopover";
+import { autoCorrectOnInput } from "@/lib/autocorrect";
 
 interface BlockItem {
   id: string;
@@ -55,10 +58,13 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
   const [copied, setCopied] = useState(false);
   const [slashMenuIndex, setSlashMenuIndex] = useState<number | null>(null);
 
-  // Document Preferences State (persisted per page)
+  // Document Preferences & Autocorrect State
   const [layout, setLayout] = useState<"centered" | "full">("centered");
   const [fontFamily, setFontFamily] = useState<"sans" | "serif" | "mono">("sans");
   const [fontSize, setFontSize] = useState<"small" | "normal">("normal");
+  const [autoCorrectEnabled, setAutoCorrectEnabled] = useState(true);
+  const [isFixingGrammar, setIsFixingGrammar] = useState(false);
+  const [grammarStatus, setGrammarStatus] = useState<string | null>(null);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
 
@@ -255,14 +261,88 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
   };
 
   const handleTitleChange = (val: string) => {
-    setTitle(val);
-    scheduleSave(val, blocks);
+    let finalVal = val;
+    if (autoCorrectEnabled) {
+      const res = autoCorrectOnInput(val);
+      if (res.corrected) {
+        finalVal = res.text;
+      }
+    }
+    setTitle(finalVal);
+    scheduleSave(finalVal, blocks);
   };
 
   const handleBlockTextChange = (id: string, text: string) => {
-    const updated = blocks.map((b) => (b.id === id ? { ...b, text } : b));
+    let finalText = text;
+    if (autoCorrectEnabled) {
+      const res = autoCorrectOnInput(text);
+      if (res.corrected) {
+        finalText = res.text;
+      }
+    }
+    const updated = blocks.map((b) => (b.id === id ? { ...b, text: finalText } : b));
     setBlocks(updated);
     scheduleSave(title, updated);
+  };
+
+  const handleFixDocumentGrammar = async () => {
+    if (isFixingGrammar) return;
+    setIsFixingGrammar(true);
+    setGrammarStatus("Checking grammar & spelling...");
+
+    try {
+      const res = await fetch("/api/grammar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          blocks,
+        }),
+      });
+
+      if (!res.ok) {
+        setGrammarStatus("Grammar service unavailable");
+        setTimeout(() => setGrammarStatus(null), 3000);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.totalChanges > 0) {
+        const nextTitle = data.title || title;
+        const nextBlocks = Array.isArray(data.blocks) ? data.blocks : blocks;
+        setTitle(nextTitle);
+        setBlocks(nextBlocks);
+
+        if (page) {
+          const updatedPage: LocalPage = {
+            ...page,
+            title: nextTitle,
+            content: { blocks: nextBlocks },
+            version: (page.version || 1) + 1,
+            updatedAt: new Date(),
+          };
+          setPage(updatedPage);
+          await localDb.pages.put(updatedPage);
+          await syncManager.queueMutation("page", page.id, "UPSERT", {
+            title: nextTitle,
+            content: { blocks: nextBlocks },
+            layout,
+            fontFamily,
+            fontSize,
+            secretToken,
+            workspaceId: page.workspaceId,
+          });
+        }
+        setGrammarStatus(`Fixed ${data.totalChanges} issue${data.totalChanges === 1 ? "" : "s"}`);
+      } else {
+        setGrammarStatus("Spelling & grammar are clean");
+      }
+    } catch {
+      setGrammarStatus("Grammar service unavailable");
+    } finally {
+      setIsFixingGrammar(false);
+      setTimeout(() => setGrammarStatus(null), 3500);
+    }
   };
 
   const handleToggleCheck = (id: string) => {
@@ -485,13 +565,33 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
       <div className="sticky top-0 z-20 px-4 sm:px-8 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0">
           <FileText className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">Notion Document Canvas</span>
+          <span className="truncate">ShNotes Document Canvas</span>
           <span>•</span>
           <span className="text-zinc-500 shrink-0">{blocks.length} blocks</span>
+          {grammarStatus && (
+            <>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium animate-in fade-in">
+                <CheckCheck className="w-3.5 h-3.5" />
+                {grammarStatus}
+              </span>
+            </>
+          )}
         </div>
 
-        {/* Consolidated Action Controls: Share & Preferences Menu (•••) */}
+        {/* Consolidated Action Controls: Fix Grammar, Share & Preferences Menu (•••) */}
         <div className="flex items-center gap-2 relative">
+          {/* Fix Grammar & Spelling Button */}
+          <button
+            onClick={handleFixDocumentGrammar}
+            disabled={isFixingGrammar}
+            title="Automatically detect and fix grammar, spelling, and punctuation errors"
+            className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 shadow-xs"
+          >
+            <Sparkles className={`w-3.5 h-3.5 text-amber-500 ${isFixingGrammar ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">{isFixingGrammar ? "Checking..." : "Fix Grammar"}</span>
+          </button>
+
           {/* Consolidated Share Button */}
           <button
             onClick={() => setSharePopoverOpen(true)}
@@ -515,7 +615,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
             </button>
 
             {preferencesOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl p-2 z-30 space-y-2 animate-in fade-in zoom-in-95 text-xs">
+              <div className="absolute right-0 top-full mt-1.5 w-60 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl p-2 z-30 space-y-2 animate-in fade-in zoom-in-95 text-xs">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2">Page Layout</span>
                   <div className="grid grid-cols-2 gap-1 mt-1">
@@ -606,6 +706,28 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     </button>
                   </div>
                 </div>
+
+                <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">Auto-Correct</span>
+                      <span className="text-[11px] text-zinc-500">Fix common typos while typing</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAutoCorrectEnabled(!autoCorrectEnabled)}
+                      className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        autoCorrectEnabled ? "bg-zinc-900 dark:bg-zinc-100" : "bg-zinc-200 dark:bg-zinc-700"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white dark:bg-zinc-900 shadow-sm ring-0 transition duration-200 ease-in-out ${
+                          autoCorrectEnabled ? "translate-x-3.5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -621,6 +743,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           id="doc-title-input"
           value={title}
           rows={1}
+          spellCheck={true}
+          autoCorrect={autoCorrectEnabled ? "on" : "off"}
+          autoCapitalize="sentences"
+          lang="en-US"
           ref={(el) => registerTextarea("doc-title-input", el)}
           onInput={(e) => autoResizeTextarea(e.currentTarget)}
           onChange={(e) => {
@@ -661,6 +787,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
                     rows={1}
+                    spellCheck={true}
+                    autoCorrect={autoCorrectEnabled ? "on" : "off"}
+                    autoCapitalize="sentences"
+                    lang="en-US"
                     ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                     onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
@@ -679,6 +809,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
                     rows={1}
+                    spellCheck={true}
+                    autoCorrect={autoCorrectEnabled ? "on" : "off"}
+                    autoCapitalize="sentences"
+                    lang="en-US"
                     ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                     onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
@@ -697,6 +831,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     id={`block-input-${block.id}`}
                     value={block.text || ""}
                     rows={1}
+                    spellCheck={true}
+                    autoCorrect={autoCorrectEnabled ? "on" : "off"}
+                    autoCapitalize="sentences"
+                    lang="en-US"
                     ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                     onInput={(e) => autoResizeTextarea(e.currentTarget)}
                     onFocus={() => setFocusedBlockId(block.id)}
@@ -717,6 +855,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
+                      spellCheck={true}
+                      autoCorrect={autoCorrectEnabled ? "on" : "off"}
+                      autoCapitalize="sentences"
+                      lang="en-US"
                       ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
@@ -743,6 +885,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
+                      spellCheck={true}
+                      autoCorrect={autoCorrectEnabled ? "on" : "off"}
+                      autoCapitalize="sentences"
+                      lang="en-US"
                       ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
@@ -768,6 +914,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
+                      spellCheck={true}
+                      autoCorrect={autoCorrectEnabled ? "on" : "off"}
+                      autoCapitalize="sentences"
+                      lang="en-US"
                       ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
@@ -788,6 +938,10 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={1}
+                      spellCheck={true}
+                      autoCorrect={autoCorrectEnabled ? "on" : "off"}
+                      autoCapitalize="sentences"
+                      lang="en-US"
                       ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}
@@ -808,6 +962,9 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                       id={`block-input-${block.id}`}
                       value={block.text || ""}
                       rows={2}
+                      spellCheck={false}
+                      autoCorrect="off"
+                      autoCapitalize="none"
                       ref={(el) => registerTextarea(`block-input-${block.id}`, el)}
                       onInput={(e) => autoResizeTextarea(e.currentTarget)}
                       onFocus={() => setFocusedBlockId(block.id)}

@@ -62,9 +62,53 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
+      spellcheck: true,
     },
     autoHideMenuBar: true,
     show: true,
+  });
+
+  // Native spellcheck and text context menu
+  win.webContents.on("context-menu", (event, params) => {
+    const { Menu, MenuItem } = require("electron");
+    const menu = new Menu();
+
+    if (params.dictionarySuggestions && params.dictionarySuggestions.length > 0) {
+      for (const suggestion of params.dictionarySuggestions) {
+        menu.append(
+          new MenuItem({
+            label: suggestion,
+            click: () => win.webContents.replaceMisspelling(suggestion),
+          })
+        );
+      }
+      menu.append(new MenuItem({ type: "separator" }));
+    }
+
+    if (params.misspelledWord) {
+      menu.append(
+        new MenuItem({
+          label: `Add "${params.misspelledWord}" to Dictionary`,
+          click: () =>
+            win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+        })
+      );
+      menu.append(new MenuItem({ type: "separator" }));
+    }
+
+    if (params.isEditable) {
+      menu.append(new MenuItem({ role: "undo" }));
+      menu.append(new MenuItem({ role: "redo" }));
+      menu.append(new MenuItem({ type: "separator" }));
+      menu.append(new MenuItem({ role: "cut" }));
+      menu.append(new MenuItem({ role: "copy" }));
+      menu.append(new MenuItem({ role: "paste" }));
+      menu.append(new MenuItem({ role: "selectAll" }));
+    }
+
+    if (menu.items.length > 0) {
+      menu.popup();
+    }
   });
 
   activeWindow = win;
