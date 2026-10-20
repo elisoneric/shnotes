@@ -128,6 +128,140 @@ export function normalizeSenderAddress(from: string, user: string): string {
 }
 
 
+export interface CleanEmailOptions {
+  title: string;
+  badge?: string;
+  headline: string;
+  bodyHtml: string;
+  details?: Array<{ label: string; value: string }>;
+  ctaText?: string;
+  ctaUrl?: string;
+  secondaryNote?: string;
+  footerText?: string;
+}
+
+/**
+ * Renders a clean, minimalist, high-compatibility HTML email template
+ * inspired by top design standards (Linear, Notion, Apple, Stripe).
+ * Uses table-based layout without flexbox to prevent broken borders or alignment in email clients.
+ */
+export function renderCleanEmailTemplate(options: CleanEmailOptions): string {
+  const {
+    title,
+    badge,
+    headline,
+    bodyHtml,
+    details = [],
+    ctaText,
+    ctaUrl,
+    secondaryNote,
+    footerText,
+  } = options;
+
+  const detailsRows = details.length > 0
+    ? `
+      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f9fafb; border: 1px solid #f3f4f6; border-radius: 8px; margin: 24px 0;">
+        ${details.map((d, idx) => `
+          <tr>
+            <td style="padding: 10px 16px; font-size: 13px; color: #6b7280; ${idx < details.length - 1 ? 'border-bottom: 1px solid #f3f4f6;' : ''}">
+              ${d.label}
+            </td>
+            <td align="right" style="padding: 10px 16px; font-size: 13px; font-weight: 600; color: #111827; ${idx < details.length - 1 ? 'border-bottom: 1px solid #f3f4f6;' : ''}">
+              ${d.value}
+            </td>
+          </tr>
+        `).join("")}
+      </table>
+    `
+    : "";
+
+  const ctaButton = ctaText && ctaUrl
+    ? `
+      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 28px 0 20px 0;">
+        <tr>
+          <td align="center">
+            <a href="${ctaUrl}" style="background-color: #111827; color: #ffffff; display: inline-block; padding: 12px 28px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; letter-spacing: -0.1px;">
+              ${ctaText}
+            </a>
+          </td>
+        </tr>
+      </table>
+    `
+    : "";
+
+  const secondaryText = secondaryNote
+    ? `
+      <p style="margin: 16px 0 0 0; font-size: 12px; color: #9ca3af; line-height: 1.5; text-align: center; word-break: break-all;">
+        ${secondaryNote}
+      </p>
+    `
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #111827;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #fafafa; padding: 48px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #ffffff; border: 1px solid #eaeaea; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
+          <tr>
+            <td style="padding: 36px 32px;">
+              <!-- Wordmark Header -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <span style="font-size: 15px; font-weight: 700; color: #111827; letter-spacing: -0.4px;">ShNotes</span>
+                  </td>
+                  ${badge ? `
+                    <td align="right">
+                      <span style="background-color: #f3f4f6; color: #4b5563; font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 6px;">
+                        ${badge}
+                      </span>
+                    </td>
+                  ` : ''}
+                </tr>
+              </table>
+
+              <!-- Main Title -->
+              <h1 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 600; color: #111827; line-height: 1.35; letter-spacing: -0.3px;">
+                ${headline}
+              </h1>
+
+              <!-- Message Body -->
+              <div style="font-size: 14px; color: #4b5563; line-height: 1.6; margin: 0 0 16px 0;">
+                ${bodyHtml}
+              </div>
+
+              <!-- Metadata Summary -->
+              ${detailsRows}
+
+              <!-- Action Button -->
+              ${ctaButton}
+
+              <!-- Fallback Note -->
+              ${secondaryText}
+
+              <!-- Subtle Minimalist Footer -->
+              <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
+                <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">
+                  ${footerText || "Sent by ShNotes Enterprise Workspace."}
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 /**
  * Tests the SMTP server connection handshake and optionally sends a real verification email.
  */
@@ -155,30 +289,19 @@ export async function testSmtpConnection(
         to: recipientEmail.trim(),
         subject: "ShNotes SMTP Verification Handshake Successful",
         text: `This is a test notification from ShNotes Enterprise. Your SMTP connection to ${config.host}:${config.port} is operational with latency ${latencyMs}ms.`,
-        html: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09090b; color: #f4f4f5; padding: 32px 16px; min-height: 100%;">
-            <div style="max-width: 520px; margin: 0 auto; background-color: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-              <div style="display: flex; align-items: center; margin-bottom: 20px;">
-                <span style="font-size: 16px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">ShNotes Enterprise</span>
-                <span style="background-color: #064e3b; color: #34d399; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-left: 12px; border: 1px solid #059669;">SMTP VERIFIED</span>
-              </div>
-              <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin-top: 0; margin-bottom: 12px;">Connection Handshake Successful</h2>
-              <p style="font-size: 13px; color: #a1a1aa; line-height: 1.5; margin-bottom: 20px;">
-                Your outbound mail delivery subsystem is successfully connected to <strong style="color: #ffffff;">${config.host}:${config.port}</strong>.
-              </p>
-              <div style="background-color: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 14px; font-family: monospace; font-size: 11px; color: #71717a; margin-bottom: 20px;">
-                <div>Host: <span style="color: #d4d4d8;">${config.host}</span></div>
-                <div>Port: <span style="color: #d4d4d8;">${config.port} (TLS: ${config.secure ? "SSL 465" : "STARTTLS"})</span></div>
-                <div>User: <span style="color: #d4d4d8;">${config.user || "(Anonymous)"}</span></div>
-                <div>Latency: <span style="color: #34d399;">${latencyMs}ms</span></div>
-                <div>Timestamp: <span style="color: #d4d4d8;">${new Date().toISOString()}</span></div>
-              </div>
-              <p style="font-size: 11px; color: #52525b; margin: 0;">
-                Sent automatically by ShNotes System Administration Subsystem.
-              </p>
-            </div>
-          </div>
-        `,
+        html: renderCleanEmailTemplate({
+          title: "SMTP Connection Verified",
+          badge: "Operational",
+          headline: "SMTP handshake verified",
+          bodyHtml: `Your outbound email delivery subsystem is connected to <strong>${config.host}:${config.port}</strong>. All system invites and notifications are operational.`,
+          details: [
+            { label: "Host", value: config.host },
+            { label: "Port", value: `${config.port} (${config.secure ? "SSL 465" : "STARTTLS 587"})` },
+            { label: "Account", value: config.user || "Anonymous" },
+            { label: "Latency", value: `${latencyMs}ms` },
+          ],
+          footerText: "Automated delivery test dispatched from ShNotes Administration.",
+        }),
       });
 
       return {
@@ -237,56 +360,21 @@ export async function sendDocumentInviteEmail(params: {
       to: params.to.trim(),
       subject: `${params.inviterName} invited you to collaborate on "${params.documentTitle}"`,
       text: `${params.inviterName} has invited you to collaborate on "${params.documentTitle}" in ${params.workspaceName}.\n\nPermission: ${roleLabel}\n${params.allowGuest ? "Guest access is enabled.\n" : ""}Access URL: ${params.inviteUrl}\n\nThis invitation link expires in 14 days.`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px 16px; min-height: 100%;">
-          <div style="max-width: 540px; margin: 0 auto; background-color: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
-            <div style="display: flex; align-items: center; margin-bottom: 24px;">
-              <span style="font-size: 16px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">ShNotes</span>
-              <span style="background-color: #27272a; color: #a1a1aa; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-left: 10px;">${params.workspaceName}</span>
-            </div>
-
-            <h1 style="font-size: 20px; font-weight: 700; color: #ffffff; line-height: 1.3; margin-top: 0; margin-bottom: 12px;">
-              Document Collaboration Invitation
-            </h1>
-
-            <p style="font-size: 14px; color: #a1a1aa; line-height: 1.6; margin-bottom: 24px;">
-              <strong style="color: #ffffff;">${params.inviterName}</strong> has invited you to collaborate directly on the document <strong style="color: #ffffff;">"${params.documentTitle}"</strong>.
-            </p>
-
-            <div style="background-color: #09090b; border: 1px solid #27272a; border-radius: 10px; padding: 16px; margin-bottom: 28px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="font-size: 12px; color: #71717a;">Document</span>
-                <span style="font-size: 12px; font-weight: 600; color: #f4f4f5;">${params.documentTitle}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="font-size: 12px; color: #71717a;">Assigned Permissions</span>
-                <span style="font-size: 12px; font-weight: 600; color: #3b82f6;">${roleLabel}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="font-size: 12px; color: #71717a;">Access Mode</span>
-                <span style="font-size: 12px; font-weight: 600; color: #10b981;">${params.allowGuest ? "Guest Access (Instant Entry)" : "Sign In / Workspace Account"}</span>
-              </div>
-            </div>
-
-            <div style="text-align: center; margin-bottom: 28px;">
-              <a href="${params.inviteUrl}" style="display: inline-block; background-color: #ffffff; color: #09090b; font-size: 13px; font-weight: 700; padding: 12px 28px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 10px rgba(255,255,255,0.15);">
-                Open Document in ShNotes
-              </a>
-            </div>
-
-            <p style="font-size: 11px; color: #71717a; line-height: 1.5; margin-bottom: 12px; word-break: break-all;">
-              Or paste this URL directly into your browser: <br/>
-              <a href="${params.inviteUrl}" style="color: #60a5fa; text-decoration: none;">${params.inviteUrl}</a>
-            </p>
-
-            <div style="border-top: 1px solid #27272a; padding-top: 16px; margin-top: 24px;">
-              <p style="font-size: 11px; color: #52525b; margin: 0;">
-                This invitation was sent by ${params.inviterName} via ShNotes Governed Workspace. Link valid for 14 days.
-              </p>
-            </div>
-          </div>
-        </div>
-      `,
+      html: renderCleanEmailTemplate({
+        title: `${params.inviterName} invited you to collaborate`,
+        badge: params.workspaceName,
+        headline: `Collaborate on "${params.documentTitle}"`,
+        bodyHtml: `<strong>${params.inviterName}</strong> has invited you to collaborate on the document <strong>"${params.documentTitle}"</strong>.`,
+        details: [
+          { label: "Document", value: params.documentTitle },
+          { label: "Permission", value: roleLabel },
+          { label: "Access Mode", value: params.allowGuest ? "Guest access enabled" : "Workspace member" },
+        ],
+        ctaText: "Open Document",
+        ctaUrl: params.inviteUrl,
+        secondaryNote: `Or open directly: <a href="${params.inviteUrl}" style="color: #4b5563; text-decoration: underline;">${params.inviteUrl}</a>`,
+        footerText: `This invitation link is valid for 14 days. Sent by ${params.inviterName} via ShNotes.`,
+      }),
     });
 
     return { ok: true };
@@ -322,55 +410,21 @@ export async function sendWelcomeEmail(params: {
       from: normalizeSenderAddress(config.from, config.user),
       to: params.to.trim(),
       subject: `Welcome to ShNotes – Your Governed Engineering Workspace`,
-      text: `Welcome to ShNotes, ${params.name}!\n\nYour account has been set up with access to the ${workspaceName} workspace as ${roleName}.\n\nAccess your workspace at: ${appUrl}/app\n\nFeatures available to you:\n- High-density governed Kanban & delivery workflows\n- Block-based rich notes with 256-bit cryptographic sharing\n- Offline-first local mutations with Dexie sync`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px 16px; min-height: 100%;">
-          <div style="max-width: 540px; margin: 0 auto; background-color: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
-            <div style="display: flex; align-items: center; margin-bottom: 24px;">
-              <span style="font-size: 16px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">ShNotes</span>
-              <span style="background-color: #064e3b; color: #34d399; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-left: 10px; border: 1px solid #059669;">GOVERNED WORKSPACE</span>
-            </div>
-
-            <h1 style="font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.3; margin-top: 0; margin-bottom: 12px;">
-              Welcome to ShNotes, ${params.name}
-            </h1>
-
-            <p style="font-size: 14px; color: #a1a1aa; line-height: 1.6; margin-bottom: 24px;">
-              Your account has been successfully provisioned. You have full access to collaborate, manage engineering deliveries, and document specifications.
-            </p>
-
-            <div style="background-color: #09090b; border: 1px solid #27272a; border-radius: 10px; padding: 18px; margin-bottom: 28px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                <span style="font-size: 12px; color: #71717a;">Workspace</span>
-                <span style="font-size: 12px; font-weight: 600; color: #f4f4f5;">${workspaceName}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                <span style="font-size: 12px; color: #71717a;">Assigned Role</span>
-                <span style="font-size: 12px; font-weight: 600; color: #3b82f6;">${roleName}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="font-size: 12px; color: #71717a;">Login Email</span>
-                <span style="font-size: 12px; font-mono; color: #a1a1aa;">${params.to}</span>
-              </div>
-            </div>
-
-            <div style="text-align: center; margin-bottom: 28px;">
-              <a href="${appUrl}/app" style="display: inline-block; background-color: #ffffff; color: #09090b; font-size: 13px; font-weight: 700; padding: 12px 30px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 10px rgba(255,255,255,0.15);">
-                Enter Your Workspace
-              </a>
-            </div>
-
-            <div style="border-top: 1px solid #27272a; padding-top: 20px; margin-top: 24px;">
-              <h3 style="font-size: 12px; font-weight: 600; color: #d4d4d8; margin-top: 0; margin-bottom: 8px;">Key Capabilities</h3>
-              <ul style="font-size: 12px; color: #a1a1aa; padding-left: 18px; line-height: 1.6; margin: 0;">
-                <li>Governed engineering delivery stages with role-based QA sign-offs</li>
-                <li>Live block canvas with 256-bit cryptographic public links</li>
-                <li>Offline local mutation outbox with Dexie IndexedDB sync</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      `,
+      text: `Welcome to ShNotes, ${params.name}!\n\nYour account has been set up with access to the ${workspaceName} workspace as ${roleName}.\n\nAccess your workspace at: ${appUrl}/app`,
+      html: renderCleanEmailTemplate({
+        title: "Welcome to ShNotes",
+        badge: workspaceName,
+        headline: `Welcome to ShNotes, ${params.name}`,
+        bodyHtml: `Your account has been provisioned. You have access to collaborate on notes, organize task boards, and share documents with your team.`,
+        details: [
+          { label: "Workspace", value: workspaceName },
+          { label: "Assigned Role", value: roleName },
+          { label: "Account Email", value: params.to },
+        ],
+        ctaText: "Open Workspace",
+        ctaUrl: `${appUrl}/app`,
+        footerText: "ShNotes Enterprise — Governed engineering workspace and notes.",
+      }),
     });
 
     return { ok: true };

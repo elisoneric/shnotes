@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getSmtpConfig, createTransporter, normalizeSenderAddress } from "@/lib/email";
+import { getSmtpConfig, createTransporter, normalizeSenderAddress, renderCleanEmailTemplate } from "@/lib/email";
 
 interface DocumentEditSession {
   pageId: string;
@@ -280,52 +280,20 @@ async function dispatchConsolidatedNotification(session: DocumentEditSession): P
   const endTimeStr = new Date(lastEditedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const subject = `Updates made to "${page.title}" by ${editorName}`;
-  const htmlBody = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09090b; color: #f4f4f5; padding: 40px 16px; min-height: 100%;">
-      <div style="max-width: 540px; margin: 0 auto; background-color: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
-        <div style="display: flex; align-items: center; margin-bottom: 20px;">
-          <span style="font-size: 16px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">ShNotes</span>
-          <span style="background-color: #27272a; color: #a1a1aa; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-left: 10px;">${page.workspace.name}</span>
-          <span style="background-color: #052e16; color: #4ade80; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-left: auto; border: 1px solid #166534;">CONSOLIDATED UPDATE</span>
-        </div>
-
-        <h1 style="font-size: 20px; font-weight: 700; color: #ffffff; line-height: 1.3; margin-top: 0; margin-bottom: 12px;">
-          Document Updates Recorded
-        </h1>
-
-        <p style="font-size: 14px; color: #a1a1aa; line-height: 1.6; margin-bottom: 24px;">
-          <strong style="color: #ffffff;">${editorName}</strong> made revisions to the document <strong style="color: #ffffff;">"${page.title}"</strong>.
-        </p>
-
-        <div style="background-color: #09090b; border: 1px solid #27272a; border-radius: 10px; padding: 18px; margin-bottom: 28px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span style="font-size: 12px; color: #71717a;">Document</span>
-            <span style="font-size: 12px; font-weight: 600; color: #f4f4f5;">${page.title}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span style="font-size: 12px; color: #71717a;">Revisions</span>
-            <span style="font-size: 12px; font-weight: 600; color: #60a5fa;">${editCount} modifications (${durationMins} min session)</span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span style="font-size: 12px; color: #71717a;">Session Period</span>
-            <span style="font-size: 12px; font-mono; color: #a1a1aa;">${startTimeStr} - ${endTimeStr}</span>
-          </div>
-        </div>
-
-        <div style="text-align: center; margin-bottom: 28px;">
-          <a href="${documentUrl}" style="display: inline-block; background-color: #ffffff; color: #09090b; font-size: 13px; font-weight: 700; padding: 12px 28px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 10px rgba(255,255,255,0.15);">
-            Review Latest Document Changes
-          </a>
-        </div>
-
-        <div style="border-top: 1px solid #27272a; padding-top: 16px; margin-top: 24px;">
-          <p style="font-size: 11px; color: #52525b; margin: 0; line-height: 1.5;">
-            This email was consolidated after an editing session to avoid notification spam. Sent to active document collaborators and subscribers.
-          </p>
-        </div>
-      </div>
-    </div>
-  `;
+  const htmlBody = renderCleanEmailTemplate({
+    title: `Updates to "${page.title}"`,
+    badge: page.workspace.name,
+    headline: `Updates made to "${page.title}"`,
+    bodyHtml: `<strong>${editorName}</strong> made revisions to the document <strong>"${page.title}"</strong>.`,
+    details: [
+      { label: "Document", value: page.title },
+      { label: "Revisions", value: `${editCount} modifications` },
+      { label: "Session Time", value: `${startTimeStr} – ${endTimeStr} (${durationMins} min)` },
+    ],
+    ctaText: "Review Document Changes",
+    ctaUrl: documentUrl,
+    footerText: "Consolidated update notification to prevent email spam. Sent to document collaborators and subscribers.",
+  });
 
   // Send to all recipients
   for (const to of Array.from(recipientEmails)) {
