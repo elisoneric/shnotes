@@ -658,117 +658,278 @@ export function Shell({ initialUser, initialView = "DASHBOARD" }: ShellProps = {
 
       {/* MAIN CONTAINER */}
       <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-        {/* Top Navbar & Active Tabs Bar */}
-        <header className="px-3 sm:px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 shrink-0 cursor-pointer"
-              title="Toggle Sidebar"
-            >
-              <PanelLeft className="w-4 h-4" />
-            </button>
-
-            {/* Active Tabs Strip: Shown prominently in full screen mode and adaptable */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 py-0.5">
-              {/* Executive Overview Tab */}
+        {/* Top Navbar & Active Tabs Bar: Responsive Split */}
+        <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 select-none">
+          {/* DESKTOP HEADER (hidden on mobile, visible on sm+) */}
+          <div className="hidden sm:flex px-4 py-2 items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <button
-                onClick={() => setCurrentView("DASHBOARD")}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer ${
-                  currentView === "DASHBOARD"
-                    ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
-                    : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40"
-                }`}
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 shrink-0 cursor-pointer"
+                title="Toggle Sidebar"
+                aria-label="Toggle Sidebar"
               >
-                <LayoutDashboard className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                <span className="hidden sm:inline">Overview</span>
+                <PanelLeft className="w-4 h-4" />
               </button>
 
-              {/* Tasks Tab (if a project is selected) */}
-              {selectedProject && (
+              {/* Active Tabs Strip: Shown prominently in desktop mode */}
+              <div
+                className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 py-0.5"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                {/* Executive Overview Tab */}
                 <button
-                  onClick={() => setCurrentView("TASKS")}
+                  onClick={() => setCurrentView("DASHBOARD")}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer ${
-                    currentView === "TASKS"
+                    currentView === "DASHBOARD"
                       ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
                       : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40"
                   }`}
                 >
-                  <Columns3 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span className="truncate max-w-[110px]">{selectedProject.name}</span>
+                  <LayoutDashboard className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span>Overview</span>
                 </button>
-              )}
 
-              {/* Open Document Tabs */}
-              {openPageIds.map((pId) => {
-                const pageItem = pages.find((p) => p.id === pId);
-                const isActive = currentView === "PAGE" && selectedPageId === pId;
-                const pageTitle = pageItem?.title || "Untitled Document";
-                return (
-                  <div
-                    key={pId}
-                    onClick={() => {
-                      setSelectedPageId(pId);
-                      setCurrentView("PAGE");
-                    }}
-                    className={`group px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer max-w-[130px] sm:max-w-[190px] ${
-                      isActive
+                {/* Tasks Tab (if a project is selected) */}
+                {selectedProject && (
+                  <button
+                    onClick={() => setCurrentView("TASKS")}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer ${
+                      currentView === "TASKS"
                         ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
                         : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40"
                     }`}
                   >
-                    {pageItem?.isLocked ? (
-                      <Lock className="w-3.5 h-3.5 shrink-0 text-rose-500" />
-                    ) : pageItem?.isPrivate ? (
-                      <Lock className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                    ) : (
-                      <FileText className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
-                    )}
-                    <span className="truncate">{pageTitle}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => handleCloseTab(pId, e)}
-                      className="p-0.5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity cursor-pointer"
-                      title="Close tab"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                );
-              })}
+                    <Columns3 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="truncate max-w-[110px]">{selectedProject.name}</span>
+                  </button>
+                )}
 
-              {/* Plus Button to Add New Document Tab */}
+                {/* Open Document Tabs */}
+                {openPageIds.map((pId) => {
+                  const pageItem = pages.find((p) => p.id === pId);
+                  const isActive = currentView === "PAGE" && selectedPageId === pId;
+                  const pageTitle = pageItem?.title || "Untitled Document";
+                  return (
+                    <div
+                      key={pId}
+                      onClick={() => {
+                        setSelectedPageId(pId);
+                        setCurrentView("PAGE");
+                      }}
+                      className={`group px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer max-w-[190px] ${
+                        isActive
+                          ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+                          : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40"
+                      }`}
+                    >
+                      {pageItem?.isLocked ? (
+                        <Lock className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                      ) : pageItem?.isPrivate ? (
+                        <Lock className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                      ) : (
+                        <FileText className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+                      )}
+                      <span className="truncate">{pageTitle}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleCloseTab(pId, e)}
+                        className="p-0.5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        title="Close tab"
+                        aria-label={`Close tab ${pageTitle}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Plus Button to Add New Document Tab */}
+                <button
+                  onClick={handleCreateNewPage}
+                  title="Add new document"
+                  aria-label="Add new document"
+                  className="p-1.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Minimalist Micro-Sync Status Badge */}
+              <SyncIndicator />
+
+              {/* Indunix AI Copilot Launcher */}
               <button
-                onClick={handleCreateNewPage}
-                title="Add new document"
-                className="p-1.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
+                onClick={() => setAiDrawerOpen(true)}
+                aria-label="Indunix AI Copilot"
+                className="px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Indunix AI Copilot</span>
+              </button>
+
+              {/* Dark / Light Toggle */}
+              <button
+                onClick={toggleDarkMode}
+                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors cursor-pointer"
+                title="Toggle theme"
+                aria-label="Toggle theme"
+              >
+                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Minimalist Micro-Sync Status Badge */}
-            <SyncIndicator />
+          {/* MOBILE HEADER (visible on mobile only, hidden on sm+) */}
+          <div className="sm:hidden flex flex-col">
+            {/* Top Bar Row */}
+            <div className="h-12 px-3 flex items-center justify-between gap-2">
+              {/* Left: Sidebar Toggle + Current Context Title */}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 cursor-pointer"
+                  title="Toggle Sidebar"
+                  aria-label="Toggle Sidebar"
+                >
+                  <PanelLeft className="w-4 h-4" />
+                </button>
 
-            {/* Indunix AI Copilot Launcher */}
-            <button
-              onClick={() => setAiDrawerOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Indunix AI Copilot</span>
-            </button>
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  {currentView === "DASHBOARD" && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <LayoutDashboard className="w-4 h-4 text-blue-500 shrink-0" />
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        Overview
+                      </span>
+                    </div>
+                  )}
+                  {currentView === "TASKS" && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Columns3 className="w-4 h-4 text-zinc-400 shrink-0" />
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        {selectedProject?.name || "Tasks"}
+                      </span>
+                    </div>
+                  )}
+                  {currentView === "ADMIN" && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Settings className="w-4 h-4 text-zinc-400 shrink-0" />
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        Admin
+                      </span>
+                    </div>
+                  )}
+                  {currentView === "PAGE" && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      {pages.find((p) => p.id === selectedPageId)?.isLocked ? (
+                        <Lock className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                      ) : pages.find((p) => p.id === selectedPageId)?.isPrivate ? (
+                        <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      ) : (
+                        <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      )}
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        {pages.find((p) => p.id === selectedPageId)?.title || "Document"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-            {/* Dark / Light Toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors cursor-pointer"
-              title="Toggle theme"
-            >
-              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
+              {/* Right Action Icons on Mobile */}
+              <div className="flex items-center gap-1 shrink-0">
+                <SyncIndicator />
+
+                <button
+                  onClick={() => setAiDrawerOpen(true)}
+                  aria-label="Indunix AI Copilot"
+                  title="Indunix AI Copilot"
+                  className="p-2 rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-xs cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  onClick={handleCreateNewPage}
+                  aria-label="New Document"
+                  title="New Document"
+                  className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  onClick={toggleDarkMode}
+                  aria-label="Toggle theme"
+                  title="Toggle theme"
+                  className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  {darkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Tab Pills Strip (Clean, Smooth, ZERO scrollbar) */}
+            {openPageIds.length > 0 && (
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto no-scrollbar border-t border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/70 dark:bg-zinc-950/50"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                {/* Overview Pill */}
+                <button
+                  onClick={() => setCurrentView("DASHBOARD")}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1 shrink-0 transition-colors border ${
+                    currentView === "DASHBOARD"
+                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent font-semibold shadow-xs"
+                      : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
+                >
+                  <LayoutDashboard className="w-3 h-3 text-blue-500 shrink-0" />
+                  <span>Overview</span>
+                </button>
+
+                {/* Open Page Tab Pills */}
+                {openPageIds.map((pId) => {
+                  const pageItem = pages.find((p) => p.id === pId);
+                  const isActive = currentView === "PAGE" && selectedPageId === pId;
+                  const pageTitle = pageItem?.title || "Untitled";
+                  return (
+                    <div
+                      key={pId}
+                      onClick={() => {
+                        setSelectedPageId(pId);
+                        setCurrentView("PAGE");
+                      }}
+                      className={`group px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors border cursor-pointer max-w-[150px] ${
+                        isActive
+                          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent font-semibold shadow-xs"
+                          : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      }`}
+                    >
+                      {pageItem?.isLocked ? (
+                        <Lock className="w-3 h-3 shrink-0 text-rose-500" />
+                      ) : pageItem?.isPrivate ? (
+                        <Lock className="w-3 h-3 shrink-0 text-amber-500" />
+                      ) : (
+                        <FileText className="w-3 h-3 shrink-0 opacity-70" />
+                      )}
+                      <span className="truncate">{pageTitle}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleCloseTab(pId, e)}
+                        className="p-0.5 rounded-full hover:bg-white/20 dark:hover:bg-zinc-800 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
+                        aria-label={`Close tab ${pageTitle}`}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </header>
 

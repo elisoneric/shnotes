@@ -760,46 +760,84 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
       className={`flex-1 flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto ${fontClass}`}
     >
       {/* Editor Top Bar: Share, Status & Private Badge */}
-      <div className="sticky top-0 z-20 px-4 sm:px-8 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0">
-          <FileText className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">ShNotes Document Canvas</span>
-          <span>•</span>
-          <span className="text-zinc-500 shrink-0">{blocks.length} blocks</span>
+      <div className="sticky top-0 z-20 px-3 sm:px-8 py-2 sm:py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-zinc-400 min-w-0 flex-1">
+          {/* Desktop Document Canvas Title & Block Count */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <FileText className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">ShNotes Document Canvas</span>
+            <span>•</span>
+            <span className="text-zinc-500 shrink-0">{blocks.length} blocks</span>
+          </div>
 
+          {/* Locked Note Indicator: Compact icon on mobile, badge on desktop */}
           {page.isLocked && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full shrink-0">
-              <Lock className="w-3 h-3 text-rose-500" />
-              <span>PIN Locked</span>
-            </span>
+            <>
+              {/* Desktop Badge */}
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full shrink-0">
+                <Lock className="w-3 h-3 text-rose-500" />
+                <span>PIN Locked</span>
+              </span>
+              {/* Mobile Compact Icon */}
+              <span
+                title="PIN Locked Note"
+                aria-label="PIN Locked Note"
+                className="inline-flex sm:hidden p-1.5 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400 shrink-0"
+              >
+                <Lock className="w-3.5 h-3.5" />
+              </span>
+            </>
           )}
 
+          {/* Private Note Indicator: Compact icon on mobile, badge on desktop */}
           {page.isPrivate && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full shrink-0">
-              <Lock className="w-3 h-3" />
-              <span>Private Note</span>
-            </span>
+            <>
+              {/* Desktop Badge */}
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full shrink-0">
+                <Lock className="w-3 h-3" />
+                <span>Private Note</span>
+              </span>
+              {/* Mobile Compact Icon */}
+              <span
+                title="Private Note"
+                aria-label="Private Note"
+                className="inline-flex sm:hidden p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0"
+              >
+                <Lock className="w-3.5 h-3.5" />
+              </span>
+            </>
           )}
 
+          {/* Grammar Status: Compact icon on mobile, full text on desktop */}
           {grammarStatus && (
             <>
-              <span>•</span>
-              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium animate-in fade-in">
+              <span className="hidden sm:inline text-zinc-500">•</span>
+              {/* Desktop Grammar Status */}
+              <span className="hidden sm:inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium animate-in fade-in">
                 <CheckCheck className="w-3.5 h-3.5" />
-                {grammarStatus}
+                <span>{grammarStatus}</span>
+              </span>
+              {/* Mobile Grammar Status */}
+              <span
+                title={grammarStatus}
+                aria-label={grammarStatus}
+                className="inline-flex sm:hidden p-1.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shrink-0 animate-in fade-in"
+              >
+                <CheckCheck className="w-3.5 h-3.5" />
               </span>
             </>
           )}
         </div>
 
         {/* Action Controls: Fix Grammar, Share & Preferences Menu (•••) */}
-        <div className="flex items-center gap-2 relative">
+        <div className="flex items-center gap-1.5 sm:gap-2 relative shrink-0">
           {/* Fix Grammar & Spelling Button */}
           <button
             onClick={handleFixDocumentGrammar}
             disabled={isFixingGrammar}
             title="Automatically detect and fix grammar, spelling, and punctuation errors"
-            className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 shadow-xs cursor-pointer"
+            aria-label="Fix Grammar"
+            className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 shadow-xs cursor-pointer"
           >
             <Sparkles className={`w-3.5 h-3.5 text-amber-500 ${isFixingGrammar ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">{isFixingGrammar ? "Checking..." : "Fix Grammar"}</span>
@@ -808,10 +846,12 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           {/* Consolidated Share Button */}
           <button
             onClick={() => setSharePopoverOpen(true)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+            title="Share Document"
+            aria-label="Share Document"
+            className="p-2 sm:px-3 sm:py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer relative"
           >
             <Share2 className="w-3.5 h-3.5 text-zinc-500" />
-            <span>Share</span>
+            <span className="hidden sm:inline">Share</span>
             {page?.secretToken && (
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Published to web" />
             )}
@@ -822,7 +862,8 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
             <button
               onClick={() => setPreferencesOpen(!preferencesOpen)}
               title="Document Preferences"
-              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              aria-label="Document Preferences"
+              className="p-2 sm:p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
             >
               <MoreHorizontal className="w-4 h-4" />
             </button>
