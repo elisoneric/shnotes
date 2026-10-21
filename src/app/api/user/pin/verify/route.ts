@@ -25,7 +25,13 @@ export async function POST(req: Request) {
       });
       if (page?.lockPinHash) {
         const isValid = verifyPin(String(pin), page.lockPinHash);
-        return NextResponse.json({ ok: true, valid: isValid });
+        if (isValid) {
+          return NextResponse.json({ ok: true, verified: true, valid: true });
+        }
+        return NextResponse.json(
+          { ok: false, verified: false, valid: false, error: "Incorrect PIN. Try again or recover via email." },
+          { status: 400 }
+        );
       }
     }
 
@@ -36,15 +42,26 @@ export async function POST(req: Request) {
     });
 
     if (!dbUser?.noteLockPinHash) {
-      return NextResponse.json({
-        ok: false,
-        valid: false,
-        error: "No lock PIN configured for this account.",
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          ok: false,
+          verified: false,
+          valid: false,
+          error: "No lock PIN configured for this account.",
+        },
+        { status: 400 }
+      );
     }
 
     const isValid = verifyPin(String(pin), dbUser.noteLockPinHash);
-    return NextResponse.json({ ok: true, valid: isValid });
+    if (isValid) {
+      return NextResponse.json({ ok: true, verified: true, valid: true });
+    }
+
+    return NextResponse.json(
+      { ok: false, verified: false, valid: false, error: "Incorrect PIN. Try again or recover via email." },
+      { status: 400 }
+    );
   } catch (err: any) {
     console.error("[Verify PIN Error]:", err);
     return NextResponse.json({ error: err.message || "Failed to verify PIN" }, { status: 500 });

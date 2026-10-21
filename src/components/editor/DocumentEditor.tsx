@@ -24,6 +24,8 @@ import {
   Image as ImageIcon,
   Upload,
   Sparkles,
+  Wand2,
+  PanelLeft,
   CheckCheck,
   ShieldCheck,
   ChevronRight,
@@ -34,6 +36,7 @@ import { autoCorrectOnInput } from "@/lib/autocorrect";
 import { TaskGovernanceModal } from "@/components/tasks/TaskGovernanceModal";
 import { NotePinChallenge } from "./NotePinChallenge";
 import { SetNotePinModal } from "./SetNotePinModal";
+import { SyncIndicator } from "@/components/layout/SyncIndicator";
 
 // In-memory session cache of pages unlocked by PIN in current browsing session
 const sessionUnlockedPageIds = new Set<string>();
@@ -50,9 +53,17 @@ interface BlockItem {
 
 interface DocumentEditorProps {
   pageId: string;
+  onToggleSidebar?: () => void;
+  onOpenAiCopilot?: () => void;
+  onCreateNewPage?: () => void;
 }
 
-export function DocumentEditor({ pageId }: DocumentEditorProps) {
+export function DocumentEditor({
+  pageId,
+  onToggleSidebar,
+  onOpenAiCopilot,
+  onCreateNewPage,
+}: DocumentEditorProps) {
   const [page, setPage] = useState<LocalPage | null>(null);
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<BlockItem[]>([]);
@@ -759,15 +770,35 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
       onPaste={handleCanvasPaste}
       className={`flex-1 flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto ${fontClass}`}
     >
-      {/* Editor Top Bar: Share, Status & Private Badge */}
-      <div className="sticky top-0 z-20 px-3 sm:px-8 py-2 sm:py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-zinc-400 min-w-0 flex-1">
+      {/* Editor Top Bar: Responsive Single Bar on Mobile, Full Canvas Bar on Desktop */}
+      <div className="sticky top-0 z-20 px-3 sm:px-8 py-2 sm:py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-sm flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0 flex-1">
+          {/* Mobile Sidebar Toggle Button */}
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="sm:hidden p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 cursor-pointer"
+              title="Toggle Sidebar"
+              aria-label="Toggle Sidebar"
+            >
+              <PanelLeft className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Desktop Document Canvas Title & Block Count */}
           <div className="hidden sm:flex items-center gap-2 shrink-0">
             <FileText className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">ShNotes Document Canvas</span>
             <span>•</span>
             <span className="text-zinc-500 shrink-0">{blocks.length} blocks</span>
+          </div>
+
+          {/* Mobile Document Title */}
+          <div className="sm:hidden flex items-center gap-1.5 min-w-0 flex-1">
+            <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+              {title || page.title || "Untitled Document"}
+            </span>
           </div>
 
           {/* Locked Note Indicator: Compact icon on mobile, badge on desktop */}
@@ -829,9 +860,14 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
           )}
         </div>
 
-        {/* Action Controls: Fix Grammar, Share & Preferences Menu (•••) */}
+        {/* Action Controls: Mobile Sync, Fix Grammar (Wand2), Share & Preferences Menu (•••) */}
         <div className="flex items-center gap-1.5 sm:gap-2 relative shrink-0">
-          {/* Fix Grammar & Spelling Button */}
+          {/* Sync indicator on mobile */}
+          <div className="sm:hidden">
+            <SyncIndicator />
+          </div>
+
+          {/* Fix Grammar & Spelling Button with distinct Wand2 icon */}
           <button
             onClick={handleFixDocumentGrammar}
             disabled={isFixingGrammar}
@@ -839,7 +875,7 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
             aria-label="Fix Grammar"
             className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 shadow-xs cursor-pointer"
           >
-            <Sparkles className={`w-3.5 h-3.5 text-amber-500 ${isFixingGrammar ? "animate-spin" : ""}`} />
+            <Wand2 className={`w-3.5 h-3.5 text-amber-500 ${isFixingGrammar ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">{isFixingGrammar ? "Checking..." : "Fix Grammar"}</span>
           </button>
 
@@ -867,6 +903,14 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
             >
               <MoreHorizontal className="w-4 h-4" />
             </button>
+
+            {/* Click-outside backdrop to dismiss menu on tap anywhere */}
+            {preferencesOpen && (
+              <div
+                className="fixed inset-0 z-20 cursor-default"
+                onClick={() => setPreferencesOpen(false)}
+              />
+            )}
 
             {preferencesOpen && (
               <div className="absolute right-0 top-full mt-1.5 w-64 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl p-2.5 z-30 space-y-2.5 animate-in fade-in zoom-in-95 text-xs">
@@ -933,6 +977,39 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     </button>
                   )}
                 </div>
+
+                {/* Mobile Quick Actions: AI Copilot & Create Note */}
+                {onOpenAiCopilot && (
+                  <div className="sm:hidden pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreferencesOpen(false);
+                        onOpenAiCopilot();
+                      }}
+                      className="w-full px-2 py-1.5 rounded-lg text-left font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Indunix AI Copilot</span>
+                    </button>
+                  </div>
+                )}
+
+                {onCreateNewPage && (
+                  <div className="sm:hidden pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreferencesOpen(false);
+                        onCreateNewPage();
+                      }}
+                      className="w-full px-2 py-1.5 rounded-lg text-left font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Create New Note</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Page Layout */}
                 <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
@@ -1050,6 +1127,39 @@ export function DocumentEditor({ pageId }: DocumentEditorProps) {
                     </button>
                   </div>
                 </div>
+
+                {/* Mobile Quick Actions: Copilot & New Page */}
+                {(onOpenAiCopilot || onCreateNewPage) && (
+                  <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800 space-y-1 sm:hidden">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2 block">Quick Actions</span>
+                    {onOpenAiCopilot && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferencesOpen(false);
+                          onOpenAiCopilot();
+                        }}
+                        className="w-full px-2 py-1.5 rounded-lg text-left text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center gap-2 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Indunix AI Copilot</span>
+                      </button>
+                    )}
+                    {onCreateNewPage && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferencesOpen(false);
+                          onCreateNewPage();
+                        }}
+                        className="w-full px-2 py-1.5 rounded-lg text-left text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>New Document</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

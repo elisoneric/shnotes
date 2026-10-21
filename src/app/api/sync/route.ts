@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { ensureSeedData } from "@/lib/seed";
 import { CommentType, TaskStage } from "@prisma/client";
 import { recordDocumentEdit, processPendingDocumentNotifications } from "@/lib/notifications";
+import { notifySyncClients } from "@/lib/syncEvents";
 
 export const dynamic = "force-dynamic";
 
@@ -203,6 +204,21 @@ export async function POST(req: Request) {
                     secretToken: payload.secretToken || null,
                   },
                 });
+
+                await prisma.pageCollaborator.upsert({
+                  where: {
+                    pageId_userId: {
+                      pageId: entityId,
+                      userId: currentUser.id,
+                    },
+                  },
+                  create: {
+                    pageId: entityId,
+                    userId: currentUser.id,
+                    role: "OWNER",
+                  },
+                  update: {},
+                }).catch(() => {});
               }
             }
           } else if (action === "DELETE") {
@@ -270,6 +286,11 @@ export async function POST(req: Request) {
       } catch (err) {
         console.warn(`[Sync] Failed to apply mutation ${m.clientMutationId}:`, err);
       }
+    }
+
+    // Broadcast mutation event to all connected SSE clients
+    if (appliedMutationIds.length > 0) {
+      notifySyncClients();
     }
 
     // Flush any pending document sessions that have reached the quiet window
@@ -341,9 +362,12 @@ export async function POST(req: Request) {
       prisma.page.findMany({
         where: {
           OR: [
-            { workspaceId: { in: workspaceIds } },
+            // 1. Non-private pages in user's active workspaces
+            { workspaceId: { in: workspaceIds }, isPrivate: false },
+            // 2. Private or personal pages where user is a collaborator or creator
+            { collaborators: { some: { userId: currentUser.id } } },
+            // 3. Pages explicitly shared with current user
             { id: { in: sharedPageIds } },
-            { workspaceId: null },
           ],
           updatedAt: { gte: sinceDate },
         },

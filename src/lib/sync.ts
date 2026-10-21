@@ -1,4 +1,4 @@
-import { localDb, MutationItem, LocalTask, LocalPage, LocalTaskComment, LocalProject } from "@/lib/dexie";
+import { localDb, MutationItem } from "@/lib/dexie";
 
 export type SyncStatus = "IDLE" | "SYNCING" | "OFFLINE" | "ERROR";
 
@@ -7,16 +7,78 @@ type SyncListener = (status: SyncStatus, pendingCount: number) => void;
 class SyncManager {
   private status: SyncStatus = "IDLE";
   private listeners: Set<SyncListener> = new Set();
-  private syncTimer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
   private isSyncing = false;
   private syncQueued = false;
+  private broadcastChannel: BroadcastChannel | null = null;
+  private eventSource: EventSource | null = null;
 
   constructor() {
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => this.handleNetworkChange(true));
       window.addEventListener("offline", () => this.handleNetworkChange(false));
       this.status = navigator.onLine ? "IDLE" : "OFFLINE";
-      this.startBackgroundSync();
+
+      // 1. Cross-tab PubSub communication with zero network cost
+      if ("BroadcastChannel" in window) {
+        try {
+          this.broadcastChannel = new BroadcastChannel("shnotes_sync");
+          this.broadcastChannel.onmessage = (event) => {
+            if (event.data?.type === "SYNC_MUTATION_SAVED") {
+              this.syncNow(false);
+            }
+          };
+        } catch {
+          // Fallback if BroadcastChannel is blocked
+        }
+      }
+
+      // 2. Real-time Server-Sent Events (SSE) change listener
+      this.initRealtimeStream();
+
+      // 3. Sync on tab focus or visibility change
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && navigator.onLine && !this.isSyncing) {
+          this.syncNow(false);
+        }
+      });
+      window.addEventListener("focus", () => {
+        if (navigator.onLine && !this.isSyncing) {
+          this.syncNow(false);
+        }
+      });
+
+      // 4. Relaxed 60-second background heartbeat (replaces aggressive 2.5s polling loop)
+      this.startHeartbeat(60000);
+    }
+  }
+
+  private initRealtimeStream() {
+    if (typeof window === "undefined" || !("EventSource" in window)) return;
+    try {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
+      this.eventSource = new EventSource("/api/sync/events");
+
+      this.eventSource.addEventListener("change", () => {
+        if (navigator.onLine && !this.isSyncing) {
+          this.syncNow(false);
+        }
+      });
+
+      this.eventSource.onerror = () => {
+        this.eventSource?.close();
+        this.eventSource = null;
+        // Exponential backoff reconnect
+        setTimeout(() => {
+          if (navigator.onLine) {
+            this.initRealtimeStream();
+          }
+        }, 15000);
+      };
+    } catch {
+      // Ignore SSE failure in restricted environments
     }
   }
 
@@ -43,18 +105,23 @@ class SyncManager {
   private handleNetworkChange(isOnline: boolean) {
     if (isOnline) {
       this.status = "IDLE";
-      this.syncNow();
+      this.initRealtimeStream();
+      this.syncNow(true);
     } else {
       this.status = "OFFLINE";
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
       this.notify();
     }
   }
 
-  public startBackgroundSync(intervalMs = 2500) {
-    if (this.syncTimer) clearInterval(this.syncTimer);
-    this.syncTimer = setInterval(() => {
+  public startHeartbeat(intervalMs = 60000) {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = setInterval(() => {
       if (typeof navigator !== "undefined" && navigator.onLine && !this.isSyncing) {
-        this.syncNow();
+        this.syncNow(false);
       }
     }, intervalMs);
   }
@@ -78,12 +145,16 @@ class SyncManager {
     await localDb.mutationQueue.add(item);
     this.notify();
 
+    // Notify other open tabs in the browser immediately
+    this.broadcastChannel?.postMessage({ type: "SYNC_MUTATION_SAVED" });
+
+    // Flush immediately to server
     if (typeof navigator !== "undefined" && navigator.onLine) {
-      this.syncNow();
+      this.syncNow(true);
     }
   }
 
-  public async syncNow(): Promise<boolean> {
+  public async syncNow(visibleSpinner = true): Promise<boolean> {
     if (this.isSyncing) {
       this.syncQueued = true;
       return false;
@@ -95,8 +166,14 @@ class SyncManager {
     }
 
     this.isSyncing = true;
-    this.status = "SYNCING";
-    this.notify();
+
+    // Only display active spinning indicator when there are actual pending mutations
+    // or when explicitly requested by user interaction, avoiding continuous spinning
+    const pendingCount = await localDb.mutationQueue.count().catch(() => 0);
+    if (pendingCount > 0 || visibleSpinner) {
+      this.status = "SYNCING";
+      this.notify();
+    }
 
     try {
       const pendingMutations = await localDb.mutationQueue.toArray();
@@ -128,24 +205,32 @@ class SyncManager {
 
       // 2. Merge server deltas into local tables
       const { deltas, currentServerTime } = data;
+      let hasNewDeltas = false;
+
       if (deltas) {
-        if (Array.isArray(deltas.workspaces)) {
+        if (Array.isArray(deltas.workspaces) && deltas.workspaces.length > 0) {
           await localDb.workspaces.bulkPut(deltas.workspaces);
+          hasNewDeltas = true;
         }
-        if (Array.isArray(deltas.projects)) {
+        if (Array.isArray(deltas.projects) && deltas.projects.length > 0) {
           await localDb.projects.bulkPut(deltas.projects);
+          hasNewDeltas = true;
         }
-        if (Array.isArray(deltas.projectStages)) {
+        if (Array.isArray(deltas.projectStages) && deltas.projectStages.length > 0) {
           await localDb.projectStages.bulkPut(deltas.projectStages);
+          hasNewDeltas = true;
         }
-        if (Array.isArray(deltas.tasks)) {
+        if (Array.isArray(deltas.tasks) && deltas.tasks.length > 0) {
           await localDb.tasks.bulkPut(deltas.tasks);
+          hasNewDeltas = true;
         }
-        if (Array.isArray(deltas.taskComments)) {
+        if (Array.isArray(deltas.taskComments) && deltas.taskComments.length > 0) {
           await localDb.taskComments.bulkPut(deltas.taskComments);
+          hasNewDeltas = true;
         }
-        if (Array.isArray(deltas.pages)) {
+        if (Array.isArray(deltas.pages) && deltas.pages.length > 0) {
           await localDb.pages.bulkPut(deltas.pages);
+          hasNewDeltas = true;
         }
         if (Array.isArray(deltas.sharedPageIds)) {
           await localDb.syncMeta.put({ key: "sharedPageIds", value: deltas.sharedPageIds });
@@ -155,6 +240,11 @@ class SyncManager {
       // 3. Update lastSyncedAt marker
       if (currentServerTime) {
         await localDb.syncMeta.put({ key: "lastSyncedAt", value: currentServerTime });
+      }
+
+      // Broadcast to other open tabs that new deltas were applied locally
+      if (hasNewDeltas) {
+        this.broadcastChannel?.postMessage({ type: "SYNC_DELTAS_MERGED" });
       }
 
       this.status = "IDLE";
@@ -168,7 +258,7 @@ class SyncManager {
       this.notify();
       if (this.syncQueued) {
         this.syncQueued = false;
-        setTimeout(() => this.syncNow(), 150);
+        setTimeout(() => this.syncNow(true), 150);
       }
     }
   }

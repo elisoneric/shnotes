@@ -93,7 +93,7 @@ export function NotePinChallenge({
 
       const data = await res.json();
 
-      if (res.ok && data.verified) {
+      if (res.ok && (data.verified || data.valid)) {
         onUnlock();
       } else {
         // Shake and reset PIN inputs
